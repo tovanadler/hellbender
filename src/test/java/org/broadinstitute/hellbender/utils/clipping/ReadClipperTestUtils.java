@@ -1,9 +1,13 @@
 package org.broadinstitute.hellbender.utils.clipping;
 
-import htsjdk.samtools.*;
+import htsjdk.samtools.Cigar;
+import htsjdk.samtools.CigarElement;
+import htsjdk.samtools.CigarOperator;
+import htsjdk.samtools.TextCigarCodec;
 import org.broadinstitute.hellbender.utils.Utils;
-import org.broadinstitute.hellbender.utils.read.ArtificialSAMUtils;
+import org.broadinstitute.hellbender.utils.read.ArtificialReadUtils;
 import org.broadinstitute.hellbender.utils.read.CigarUtils;
+import org.broadinstitute.hellbender.utils.read.MutableRead;
 
 import java.util.LinkedList;
 import java.util.List;
@@ -22,11 +26,11 @@ public class ReadClipperTestUtils {
             new CigarElement(1, CigarOperator.MATCH_OR_MISMATCH)};
 
 
-    public static SAMRecord makeReadFromCigar(Cigar cigar) {
-        return ArtificialSAMUtils.createArtificialRead(Utils.arrayFromArrayWithLength(BASES, cigar.getReadLength()), Utils.arrayFromArrayWithLength(QUALS, cigar.getReadLength()), cigar.toString());
+    public static MutableRead makeReadFromCigar(Cigar cigar) {
+        return ArtificialReadUtils.createArtificialRead(Utils.arrayFromArrayWithLength(BASES, cigar.getReadLength()), Utils.arrayFromArrayWithLength(QUALS, cigar.getReadLength()), cigar.toString());
     }
 
-    public static SAMRecord makeReadFromCigar(String cigarString) {
+    public static MutableRead makeReadFromCigar(String cigarString) {
         return makeReadFromCigar(TextCigarCodec.decode(cigarString));
     }
 

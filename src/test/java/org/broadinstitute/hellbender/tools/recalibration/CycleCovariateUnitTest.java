@@ -1,11 +1,11 @@
 package org.broadinstitute.hellbender.tools.recalibration;
 
+import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMReadGroupRecord;
-import htsjdk.samtools.SAMRecord;
 import org.broadinstitute.hellbender.tools.recalibration.covariates.CycleCovariate;
 import org.broadinstitute.hellbender.exceptions.UserException;
-import org.broadinstitute.hellbender.utils.read.ArtificialSAMUtils;
-import org.broadinstitute.hellbender.utils.read.ReadUtils;
+import org.broadinstitute.hellbender.utils.read.ArtificialReadUtils;
+import org.broadinstitute.hellbender.utils.read.MutableRead;
 import org.testng.Assert;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
@@ -14,12 +14,15 @@ import org.testng.annotations.Test;
 public class CycleCovariateUnitTest {
     CycleCovariate covariate;
     RecalibrationArgumentCollection RAC;
+    SAMReadGroupRecord illuminaReadGroup;
 
     @BeforeClass
     public void init() {
         RAC = new RecalibrationArgumentCollection();
         covariate = new CycleCovariate();
         covariate.initialize(RAC);
+        illuminaReadGroup = new SAMReadGroupRecord("MY.ID");
+        illuminaReadGroup.setPlatform("illumina");
     }
 
     @BeforeMethod
@@ -29,26 +32,27 @@ public class CycleCovariateUnitTest {
 
     @Test
     public void testSimpleCycles() {
-        short readLength = 10;
-        SAMRecord read = ArtificialSAMUtils.createRandomRead(readLength);
-        read.setReadPairedFlag(true);
-        ReadUtils.setReadGroup(read, new SAMReadGroupRecord("MY.ID"));
-        read.getReadGroup().setPlatform("illumina");
+        final SAMFileHeader header = ArtificialReadUtils.createArtificialSamHeaderWithReadGroup(illuminaReadGroup);
 
-        ReadCovariates readCovariates = new ReadCovariates(read.getReadLength(), 1);
-        covariate.recordValues(read, readCovariates);
+        short readLength = 10;
+        MutableRead read = ArtificialReadUtils.createRandomRead(header, readLength);
+        read.setIsPaired(true);
+        read.setReadGroup(illuminaReadGroup.getReadGroupId());
+
+        ReadCovariates readCovariates = new ReadCovariates(read.getLength(), 1);
+        covariate.recordValues(read, header, readCovariates);
         verifyCovariateArray(readCovariates.getMismatchesKeySet(), 1, (short) 1);
 
-        read.setReadNegativeStrandFlag(true);
-        covariate.recordValues(read, readCovariates);
+        read.setIsNegativeStrand(true);
+        covariate.recordValues(read, header, readCovariates);
         verifyCovariateArray(readCovariates.getMismatchesKeySet(), readLength, -1);
 
-        read.setSecondOfPairFlag(true);
-        covariate.recordValues(read, readCovariates);
+        read.setIsSecondOfPair(true);
+        covariate.recordValues(read, header, readCovariates);
         verifyCovariateArray(readCovariates.getMismatchesKeySet(), -readLength, 1);
 
-        read.setReadNegativeStrandFlag(false);
-        covariate.recordValues(read, readCovariates);
+        read.setIsNegativeStrand(false);
+        covariate.recordValues(read, header, readCovariates);
         verifyCovariateArray(readCovariates.getMismatchesKeySet(), -1, -1);
     }
 
@@ -62,24 +66,27 @@ public class CycleCovariateUnitTest {
 
     @Test(expectedExceptions={UserException.class})
     public void testMoreThanMaxCycleFails() {
-        int readLength = RAC.MAXIMUM_CYCLE_VALUE + 1;
-        SAMRecord read = ArtificialSAMUtils.createRandomRead(readLength);
-        read.setReadPairedFlag(true);
-        ReadUtils.setReadGroup(read, new SAMReadGroupRecord("MY.ID"));
-        read.getReadGroup().setPlatform("illumina");
+        final SAMFileHeader header = ArtificialReadUtils.createArtificialSamHeaderWithReadGroup(illuminaReadGroup);
 
-        ReadCovariates readCovariates = new ReadCovariates(read.getReadLength(), 1);
-        covariate.recordValues(read, readCovariates);
+        int readLength = RAC.MAXIMUM_CYCLE_VALUE + 1;
+        MutableRead read = ArtificialReadUtils.createRandomRead(readLength);
+        read.setIsPaired(true);
+        read.setReadGroup(illuminaReadGroup.getReadGroupId());
+
+        ReadCovariates readCovariates = new ReadCovariates(read.getLength(), 1);
+        covariate.recordValues(read, header, readCovariates);
     }
 
     @Test
     public void testMaxCyclePasses() {
+        final SAMFileHeader header = ArtificialReadUtils.createArtificialSamHeaderWithReadGroup(illuminaReadGroup);
+
         int readLength = RAC.MAXIMUM_CYCLE_VALUE;
-        SAMRecord read = ArtificialSAMUtils.createRandomRead(readLength);
-        read.setReadPairedFlag(true);
-        ReadUtils.setReadGroup(read, new SAMReadGroupRecord("MY.ID"));
-        read.getReadGroup().setPlatform("illumina");
-        ReadCovariates readCovariates = new ReadCovariates(read.getReadLength(), 1);
-        covariate.recordValues(read, readCovariates);
+        MutableRead read = ArtificialReadUtils.createRandomRead(readLength);
+        read.setIsPaired(true);
+        read.setReadGroup(illuminaReadGroup.getReadGroupId());
+
+        ReadCovariates readCovariates = new ReadCovariates(read.getLength(), 1);
+        covariate.recordValues(read, header, readCovariates);
     }
 }

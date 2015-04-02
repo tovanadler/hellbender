@@ -1,6 +1,6 @@
 package org.broadinstitute.hellbender.tools.recalibration.covariates;
 
-import htsjdk.samtools.SAMRecord;
+import htsjdk.samtools.SAMFileHeader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.broadinstitute.hellbender.exceptions.GATKException;
@@ -10,6 +10,7 @@ import org.broadinstitute.hellbender.tools.recalibration.RecalibrationArgumentCo
 import org.broadinstitute.hellbender.utils.BaseUtils;
 import org.broadinstitute.hellbender.utils.clipping.ClippingRepresentation;
 import org.broadinstitute.hellbender.utils.clipping.ReadClipper;
+import org.broadinstitute.hellbender.utils.read.MutableRead;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -54,15 +55,15 @@ public class ContextCovariate implements Covariate {
     }
 
     @Override
-    public void recordValues(final SAMRecord read, final ReadCovariates values) {
+    public void recordValues(final MutableRead read, final SAMFileHeader header, final ReadCovariates values) {
 
         // store the original bases and then write Ns over low quality ones
-        final byte[] originalBases = Arrays.copyOf(read.getReadBases(), read.getReadBases().length);
+        final byte[] originalBases = Arrays.copyOf(read.getBases(), read.getBases().length);
         // Write N's over the low quality tail of the reads to avoid adding them into the context
-        final SAMRecord clippedRead = ReadClipper.clipLowQualEnds(read, LOW_QUAL_TAIL, ClippingRepresentation.WRITE_NS);
+        final MutableRead clippedRead = ReadClipper.clipLowQualEnds(read, LOW_QUAL_TAIL, ClippingRepresentation.WRITE_NS);
         
-        final boolean negativeStrand = clippedRead.getReadNegativeStrandFlag();
-        byte[] bases = clippedRead.getReadBases();
+        final boolean negativeStrand = clippedRead.isReverseStrand();
+        byte[] bases = clippedRead.getBases();
         if (negativeStrand)
             bases = BaseUtils.simpleReverseComplement(bases);
 
@@ -88,7 +89,7 @@ public class ContextCovariate implements Covariate {
         }
 
         // put the original bases back in
-        read.setReadBases(originalBases);
+        read.setBases(originalBases);
     }
 
     // Used to get the covariate's value from input csv file during on-the-fly recalibration

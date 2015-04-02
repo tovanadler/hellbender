@@ -1,6 +1,5 @@
 package org.broadinstitute.hellbender.tools.exome;
 
-import htsjdk.samtools.SAMRecord;
 import htsjdk.samtools.SAMSequenceDictionary;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
@@ -14,6 +13,8 @@ import org.broadinstitute.hellbender.engine.ReadWalker;
 import org.broadinstitute.hellbender.engine.ReferenceContext;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.utils.*;
+import org.broadinstitute.hellbender.utils.read.MutableRead;
+import org.broadinstitute.hellbender.utils.read.Read;
 
 import java.io.File;
 import java.io.IOException;
@@ -288,7 +289,7 @@ public final class ExomeReadCounts extends ReadWalker {
     }
 
     @Override
-    public void apply(final SAMRecord read, final ReferenceContext referenceContext, final FeatureContext featureContext) {
+    public void apply(final MutableRead read, final ReferenceContext referenceContext, final FeatureContext featureContext) {
         final GenomeLoc readLocation = genomeLocFactory.createGenomeLoc(read);
 
         final int columnIndex = countColumns.columnIndex(read);
@@ -502,7 +503,7 @@ public final class ExomeReadCounts extends ReadWalker {
          * @param read the query read.
          * @return a value from 0 to <code>{@link #columnCount()} - 1</code>, or -1 if the value is to be discarded.
          */
-        protected abstract int columnIndex(SAMRecord read);
+        protected abstract int columnIndex(Read read);
     }
 
     /**
@@ -523,7 +524,7 @@ public final class ExomeReadCounts extends ReadWalker {
         }
 
         @Override
-        protected int columnIndex(final SAMRecord read) {
+        protected int columnIndex(final Read read) {
             return 0;
         }
     }
@@ -549,7 +550,7 @@ public final class ExomeReadCounts extends ReadWalker {
         }
 
         @Override
-        protected int columnIndex(final SAMRecord read) {
+        protected int columnIndex(final Read read) {
             return tool.sampleCollection.sampleIndexByRead(read);
         }
     }
@@ -576,7 +577,7 @@ public final class ExomeReadCounts extends ReadWalker {
         }
 
         @Override
-        protected int columnIndex(final SAMRecord read) {
+        protected int columnIndex(final Read read) {
             return tool.sampleCollection.readGroupIndexByRead(read);
         }
    }

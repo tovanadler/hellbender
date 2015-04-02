@@ -3,11 +3,11 @@ package org.broadinstitute.hellbender.utils.locusiterator;
 import htsjdk.samtools.Cigar;
 import htsjdk.samtools.CigarElement;
 import htsjdk.samtools.CigarOperator;
-import htsjdk.samtools.SAMRecord;
+import org.broadinstitute.hellbender.utils.read.MutableRead;
 
 public final class LIBS_position {
 
-    SAMRecord read;
+    MutableRead read;
 
     final int numOperators;
     int currentOperatorIndex = 0;
@@ -25,7 +25,7 @@ public final class LIBS_position {
 
     boolean sawMop = false;
 
-    public LIBS_position(final SAMRecord read) {
+    public LIBS_position(final MutableRead read) {
         this.read = read;
         numOperators = read.getCigar().numCigarElements();
     }

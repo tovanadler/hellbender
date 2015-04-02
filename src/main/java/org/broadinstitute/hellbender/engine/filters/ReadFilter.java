@@ -1,11 +1,11 @@
 package org.broadinstitute.hellbender.engine.filters;
 
-import htsjdk.samtools.SAMRecord;
+import org.broadinstitute.hellbender.utils.read.Read;
 
 import java.util.function.Predicate;
 
 @FunctionalInterface
-public interface ReadFilter extends Predicate<SAMRecord> {
+public interface ReadFilter extends Predicate<Read> {
 
     //HACK: These methods are a hack to get to get the type system to accept compositions of ReadFilters.
     default ReadFilter and(ReadFilter filter ) {

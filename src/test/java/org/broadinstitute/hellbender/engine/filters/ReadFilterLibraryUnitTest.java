@@ -2,7 +2,8 @@ package org.broadinstitute.hellbender.engine.filters;
 
 import htsjdk.samtools.*;
 import org.broadinstitute.hellbender.utils.QualityUtils;
-import org.broadinstitute.hellbender.utils.read.ArtificialSAMUtils;
+import org.broadinstitute.hellbender.utils.read.ArtificialReadUtils;
+import org.broadinstitute.hellbender.utils.read.MutableRead;
 import org.testng.Assert;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
@@ -23,7 +24,7 @@ public final class ReadFilterLibraryUnitTest {
     private static final int CHR_SIZE = 1000;
     private static final int GROUP_COUNT = 5;
 
-    private final SAMFileHeader header = ArtificialSAMUtils.createArtificialSamHeaderWithGroups(CHR_COUNT, CHR_START, CHR_SIZE, GROUP_COUNT);
+    private final SAMFileHeader header = ArtificialReadUtils.createArtificialSamHeaderWithGroups(CHR_COUNT, CHR_START, CHR_SIZE, GROUP_COUNT);
 
     /**
      * Creates a read record.
@@ -36,21 +37,19 @@ public final class ReadFilterLibraryUnitTest {
      *              (1-based)
      * @return never <code>null</code>
      */
-    private SAMRecord createRead(final Cigar cigar, final int group, final int reference, final int start) {
-        final SAMRecord record = ArtificialSAMUtils.createArtificialRead(cigar);
-        record.setHeader(header);
-        record.setAlignmentStart(start);
-        record.setReferenceIndex(reference);
-        record.setAttribute(SAMTag.RG.toString(), header.getReadGroups().get(group).getReadGroupId());
+    private MutableRead createRead(final Cigar cigar, final int group, final int reference, final int start) {
+        final MutableRead record = ArtificialReadUtils.createArtificialRead(header, cigar);
+        record.setPosition(header.getSequence(reference).getSequenceName(), start);
+        record.setReadGroup(header.getReadGroups().get(group).getReadGroupId());
         return record;
 
     }
 
     @Test
     public void testCheckSeqStored() {
-        final SAMRecord goodRead = ArtificialSAMUtils.createArtificialRead(new byte[]{(byte) 'A'}, new byte[]{(byte) 'A'}, "1M");
-        final SAMRecord badRead = ArtificialSAMUtils.createArtificialRead(new byte[]{}, new byte[]{}, "1M");
-        badRead.setReadString("*");
+        final MutableRead goodRead = ArtificialReadUtils.createArtificialRead(new byte[]{(byte) 'A'}, new byte[]{(byte) 'A'}, "1M");
+        final MutableRead badRead = ArtificialReadUtils.createArtificialRead(new byte[]{}, new byte[]{}, "1M");
+        badRead.setBases(new byte[0]);
 
         Assert.assertTrue(SEQ_IS_STORED.test(goodRead));
         Assert.assertFalse(SEQ_IS_STORED.test(badRead));
@@ -60,12 +59,12 @@ public final class ReadFilterLibraryUnitTest {
     public void testCigarNOperatorFilter(String cigarString) {
 
         final ReadFilter filter = ReadFilterLibrary.WELLFORMED;
-        final SAMRecord read = buildSAMRecord(cigarString);
+        final MutableRead read = buildMutableRead(cigarString);
         final boolean containsN = cigarString.contains("N");
         Assert.assertEquals(containsN, !filter.test(read), cigarString);
     }
 
-    private SAMRecord buildSAMRecord(final String cigarString) {
+    protected MutableRead buildMutableRead(final String cigarString) {
         final Cigar nContainingCigar = TextCigarCodec.decode(cigarString);
         return this.createRead(nContainingCigar, 1, 0, 10);
     }
@@ -100,17 +99,17 @@ public final class ReadFilterLibraryUnitTest {
         return result.iterator();
     }
 
-    private SAMRecord simpleGoodRead() {
+    private MutableRead simpleGoodRead() {
         String cigarString = "101M";
         final Cigar nContainingCigar = TextCigarCodec.decode(cigarString);
-        SAMRecord read =  createRead(nContainingCigar, 1, 0, 10);
+        MutableRead read = createRead(nContainingCigar, 1, 0, 10);
         read.setMappingQuality(50);
         return read;
     }
 
     @Test
     public void passesAllFilters() {
-        SAMRecord read = simpleGoodRead();
+        MutableRead read = simpleGoodRead();
         Assert.assertTrue(MAPPED.test(read), "MAPPED " + read.toString());
         Assert.assertTrue(PRIMARY_ALIGNMENT.test(read), "PRIMARY_ALIGNMENT " + read.toString());
         Assert.assertTrue(NOT_DUPLICATE.test(read), "NOT_DUPLICATE " + read.toString());
@@ -119,7 +118,6 @@ public final class ReadFilterLibraryUnitTest {
         Assert.assertTrue(MAPPING_QUALITY_NOT_ZERO.test(read), "MAPPING_QUALITY_NOT_ZERO " + read.toString());
         Assert.assertTrue(VALID_ALIGNMENT_START.test(read), "VALID_ALIGNMENT_START " + read.toString());
         Assert.assertTrue(VALID_ALIGNMENT_END.test(read), "VALID_ALIGNMENT_END " + read.toString());
-        Assert.assertTrue(ALIGNMENT_AGREES_WITH_HEADER.test(read), "ALIGNMENT_AGREES_WITH_HEADER " + read.toString());
         Assert.assertTrue(HAS_READ_GROUP.test(read), "HAS_READ_GROUP " + read.toString());
         Assert.assertTrue(HAS_MATCHING_BASES_AND_QUALS.test(read), "HAS_MATCHING_BASES_AND_QUALS " + read.toString());
         Assert.assertTrue(SEQ_IS_STORED.test(read), "SEQ_IS_STORED " + read.toString());
@@ -130,101 +128,85 @@ public final class ReadFilterLibraryUnitTest {
 
     @Test
     public void failsMAPPED_flag() {
-        SAMRecord read = simpleGoodRead();
-        read.setReadUnmappedFlag(true);
+        MutableRead read = simpleGoodRead();
+        read.setIsUnmapped();
         Assert.assertFalse(MAPPED.test(read), read.toString());
     }
 
     @Test
-    public void failsMAPPED_alignmenStart() {
-        SAMRecord read = simpleGoodRead();
-        read.setAlignmentStart(SAMRecord.NO_ALIGNMENT_START);
+    public void failsMAPPED_alignmentStart() {
+        MutableRead read = simpleGoodRead();
+        read.setPosition(read.getContig(), 0);
         Assert.assertFalse(MAPPED.test(read), read.toString());
     }
 
     @Test
     public void failsNOT_DUPLICATE() {
-        SAMRecord read = simpleGoodRead();
-        read.setDuplicateReadFlag(true);
+        MutableRead read = simpleGoodRead();
+        read.setIsDuplicate(true);
         Assert.assertFalse(NOT_DUPLICATE.test(read), read.toString());
     }
 
     @Test
     public void failsPASSES_VENDOR_QUALITY_CHECK() {
-        SAMRecord read = simpleGoodRead();
-        read.setReadFailsVendorQualityCheckFlag(true);
+        MutableRead read = simpleGoodRead();
+        read.setFailsVendorQualityCheck(true);
         Assert.assertFalse(PASSES_VENDOR_QUALITY_CHECK.test(read), read.toString());
     }
 
     @Test
     public void failsMAPPING_QUALITY_AVAILABLE() {
-        SAMRecord read = simpleGoodRead();
+        MutableRead read = simpleGoodRead();
         read.setMappingQuality(QualityUtils.MAPPING_QUALITY_UNAVAILABLE);
         Assert.assertFalse(MAPPING_QUALITY_AVAILABLE.test(read), read.toString());
     }
 
     @Test
     public void failsMAPPING_QUALITY_NOT_ZERO() {
-        SAMRecord read = simpleGoodRead();
+        MutableRead read = simpleGoodRead();
         read.setMappingQuality(0);
         Assert.assertFalse(MAPPING_QUALITY_NOT_ZERO.test(read), read.toString());
     }
 
     @Test
     public void failsVALID_ALIGNMENT_START_case1() {
-        SAMRecord read = simpleGoodRead();
-        read.setAlignmentStart(SAMRecord.NO_ALIGNMENT_START);
+        MutableRead read = simpleGoodRead();
+        read.setPosition(read.getContig(), 0);
         Assert.assertFalse(VALID_ALIGNMENT_START.test(read), read.toString());
     }
 
     @Test
     public void failsVALID_ALIGNMENT_START_case2() {
-        SAMRecord read = simpleGoodRead();
-        read.setAlignmentStart(-1);
+        MutableRead read = simpleGoodRead();
+        read.setPosition(read.getContig(), -1);
         Assert.assertFalse(VALID_ALIGNMENT_START.test(read), read.toString());
     }
 
     @Test
-    public void failsALIGNMENT_AGREES_WITH_HEADER_case1() {
-        SAMRecord read = simpleGoodRead();
-        read.setReferenceIndex(SAMRecord.NO_ALIGNMENT_REFERENCE_INDEX);
-        read.setAlignmentStart(10);
-        Assert.assertFalse(ALIGNMENT_AGREES_WITH_HEADER.test(read), read.toString());
-    }
-
-    @Test
-    public void failsALIGNMENT_AGREES_WITH_HEADER_case2() {
-        SAMRecord read = simpleGoodRead();
-        final int length = read.getHeader().getSequence(0).getSequenceLength();
-        read.setAlignmentStart(length+10);
-        Assert.assertFalse(ALIGNMENT_AGREES_WITH_HEADER.test(read), read.toString());
-    }
-
-    @Test
     public void failsHAS_READ_GROUP() {
-        SAMRecord read = simpleGoodRead();
-        read.setAttribute(SAMTag.RG.name(), null);
+        MutableRead read = simpleGoodRead();
+        read.setReadGroup(null);
         Assert.assertFalse(HAS_READ_GROUP.test(read), read.toString());
     }
 
     @Test
     public void failsHAS_MATCHING_BASES_AND_QUALS() {
-        SAMRecord read = simpleGoodRead();
+        MutableRead read = simpleGoodRead();
         read.setBaseQualities(new byte[]{1,2,3});
         Assert.assertFalse(HAS_MATCHING_BASES_AND_QUALS.test(read), read.toString());
     }
 
     @Test
     public void failsSEQ_IS_STORED() {
-        SAMRecord read = simpleGoodRead();
-        read.setReadBases(SAMRecord.NULL_SEQUENCE);
+        MutableRead read = simpleGoodRead();
+        read.setBases(new byte[0]);
         Assert.assertFalse(SEQ_IS_STORED.test(read), read.toString());
     }
 
     @Test
     public void failsCIGAR_IS_SUPPORTED() {
-        SAMRecord read = simpleGoodRead();
-        read.setCigarString("10M2N10M");
+        MutableRead read = simpleGoodRead();
+        read.setCigar("10M2N10M");
         Assert.assertFalse(CIGAR_IS_SUPPORTED.test(read), read.toString());
     }
 

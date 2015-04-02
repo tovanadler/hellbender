@@ -4,7 +4,7 @@ import com.google.common.annotations.VisibleForTesting;
 import htsjdk.samtools.Cigar;
 import htsjdk.samtools.CigarElement;
 import htsjdk.samtools.CigarOperator;
-import htsjdk.samtools.SAMRecord;
+import org.broadinstitute.hellbender.utils.read.MutableRead;
 
 /**
  * A read transformer that refactor NDN cigar elements to one N element.
@@ -25,10 +25,10 @@ import htsjdk.samtools.SAMRecord;
 public final class NDNCigarReadTransformer implements ReadTransformer {
 
     @Override
-    public SAMRecord apply(final SAMRecord read) {
+    public MutableRead apply(final MutableRead read) {
         final Cigar originalCigar = read.getCigar();
-        if (originalCigar.isValid(read.getReadName(),-1) != null)
-            throw new IllegalArgumentException("try to transform a read with non-valid cigar string: readName: "+read.getReadName()+" Cigar String: "+originalCigar);
+        if (originalCigar.isValid(read.getName(),-1) != null)
+            throw new IllegalArgumentException("try to transform a read with non-valid cigar string: readName: "+read.getName()+" Cigar String: "+originalCigar);
         read.setCigar(refactorNDNtoN(originalCigar));
         return read;
     }

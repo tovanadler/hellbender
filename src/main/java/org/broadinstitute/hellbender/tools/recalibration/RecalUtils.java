@@ -1,7 +1,7 @@
 package org.broadinstitute.hellbender.tools.recalibration;
 
+import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMReadGroupRecord;
-import htsjdk.samtools.SAMRecord;
 import org.apache.commons.lang3.tuple.MutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.logging.log4j.LogManager;
@@ -14,6 +14,7 @@ import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.collections.NestedIntegerArray;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
 import org.broadinstitute.hellbender.utils.io.Resource;
+import org.broadinstitute.hellbender.utils.read.MutableRead;
 import org.broadinstitute.hellbender.utils.recalibration.EventType;
 import org.broadinstitute.hellbender.utils.report.GATKReport;
 import org.broadinstitute.hellbender.utils.report.GATKReportTable;
@@ -666,8 +667,8 @@ public class RecalUtils {
      * @param read The read to adjust
      * @param RAC  The list of shared command line arguments
      */
-    public static void parsePlatformForRead(final SAMRecord read, final RecalibrationArgumentCollection RAC) {
-        SAMReadGroupRecord readGroup = read.getReadGroup();
+    public static void parsePlatformForRead(final MutableRead read, final SAMFileHeader header, final RecalibrationArgumentCollection RAC) {
+        SAMReadGroupRecord readGroup = ReadUtils.getSAMReadGroupRecordForRead(read, header);
 
         if (RAC.FORCE_PLATFORM != null && (readGroup.getPlatform() == null || !readGroup.getPlatform().equals(RAC.FORCE_PLATFORM))) {
             readGroup.setPlatform(RAC.FORCE_PLATFORM);
@@ -678,13 +679,13 @@ public class RecalUtils {
                 if (!warnUserNullPlatform) {
                     Utils.warnUser("The input .bam file contains reads with no platform information. " +
                             "Defaulting to platform = " + RAC.DEFAULT_PLATFORM + ". " +
-                            "First observed at read with name = " + read.getReadName());
+                            "First observed at read with name = " + read.getName());
                     warnUserNullPlatform = true;
                 }
                 readGroup.setPlatform(RAC.DEFAULT_PLATFORM);
             }
             else {
-                throw new UserException.MalformedBAM(read, "The input .bam file contains reads with no platform information. First observed at read with name = " + read.getReadName());
+                throw new UserException.MalformedRead(read, "The input .bam file contains reads with no platform information. First observed at read with name = " + read.getName());
             }
         }
     }
@@ -709,7 +710,7 @@ public class RecalUtils {
      * @param color    The color
      * @return The next base in the sequence
      */
-    private static byte getNextBaseFromColor(SAMRecord read, final byte prevBase, final byte color) {
+    private static byte getNextBaseFromColor(MutableRead read, final byte prevBase, final byte color) {
         switch (color) {
             case '0':
                 return prevBase;
@@ -720,33 +721,29 @@ public class RecalUtils {
             case '3':
                 return performColorThree(prevBase);
             default:
-                throw new UserException.MalformedBAM(read, "Unrecognized color space in SOLID read, color = " + (char) color +
+                throw new UserException.MalformedRead(read, "Unrecognized color space in SOLID read, color = " + (char) color +
                         " Unfortunately this bam file can not be recalibrated without full color space information because of potential reference bias.");
         }
     }
 
     /**
-     * Parse through the color space of the read and add a new tag to the SAMRecord that says which bases are
+     * Parse through the color space of the read and add a new tag to the MutableRead that says which bases are
      * inconsistent with the color space. If there is a no call in the color space, this method returns false meaning
      * this read should be skipped
      *
      * @param strategy the strategy used for SOLID no calls
-     * @param read     The SAMRecord to parse
+     * @param read     The MutableRead to parse
+     * @param header   SAM header for the read
      * @return true if this read is consistent or false if this read should be skipped
      */
-    public static boolean isColorSpaceConsistent(final SOLID_NOCALL_STRATEGY strategy, final SAMRecord read) {
-        if (!ReadUtils.isSOLiDRead(read)) // If this is a SOLID read then we have to check if the color space is inconsistent. This is our only sign that SOLID has inserted the reference base
+    public static boolean isColorSpaceConsistent(final SOLID_NOCALL_STRATEGY strategy, final MutableRead read, final SAMFileHeader header) {
+        if (!ReadUtils.isSOLiDRead(read, header)) // If this is a SOLID read then we have to check if the color space is inconsistent. This is our only sign that SOLID has inserted the reference base
             return true;
 
         // Haven't calculated the inconsistency array yet for this read
-        if (read.getAttribute(RecalUtils.COLOR_SPACE_INCONSISTENCY_TAG) == null) {
-            final Object attr = read.getAttribute(RecalUtils.COLOR_SPACE_ATTRIBUTE_TAG);
-            if (attr != null) {
-                byte[] colorSpace;
-                if (attr instanceof String)
-                    colorSpace = ((String) attr).getBytes();
-                else
-                    throw new UserException.MalformedBAM(read, String.format("Value encoded by %s in %s isn't a string!", RecalUtils.COLOR_SPACE_ATTRIBUTE_TAG, read.getReadName()));
+        if (! read.hasAttribute(RecalUtils.COLOR_SPACE_INCONSISTENCY_TAG)) {
+            if (read.hasAttribute(RecalUtils.COLOR_SPACE_ATTRIBUTE_TAG)) {
+                byte[] colorSpace = read.getAttributeAsString(RecalUtils.COLOR_SPACE_ATTRIBUTE_TAG).getBytes();
 
                 final boolean badColor = hasNoCallInColorSpace(colorSpace);
                 if (badColor) {
@@ -754,14 +751,14 @@ public class RecalUtils {
                         return false; // can't recalibrate a SOLiD read with no calls in the color space, and the user wants to skip over them
                     }
                     else if (strategy == SOLID_NOCALL_STRATEGY.PURGE_READ) {
-                        read.setReadFailsVendorQualityCheckFlag(true);
+                        read.setFailsVendorQualityCheck(true);
                         return false;
                     }
                 }
 
-                byte[] readBases = read.getReadBases(); // Loop over the read and calculate first the inferred bases from the color and then check if it is consistent with the read
-                if (read.getReadNegativeStrandFlag())
-                    readBases = BaseUtils.simpleReverseComplement(read.getReadBases());
+                byte[] readBases = read.getBases(); // Loop over the read and calculate first the inferred bases from the color and then check if it is consistent with the read
+                if (read.isReverseStrand())
+                    readBases = BaseUtils.simpleReverseComplement(read.getBases());
 
                 final byte[] inconsistency = new byte[readBases.length];
                 int i;
@@ -774,7 +771,7 @@ public class RecalUtils {
                 read.setAttribute(RecalUtils.COLOR_SPACE_INCONSISTENCY_TAG, inconsistency);
             }
             else if (strategy == SOLID_NOCALL_STRATEGY.THROW_EXCEPTION) // if the strategy calls for an exception, throw it
-                throw new UserException.MalformedBAM(read, "Unable to find color space information in SOLiD read. First observed at read with name = " + read.getReadName() + " Unfortunately this .bam file can not be recalibrated without color space information because of potential reference bias.");
+                throw new UserException.MalformedRead(read, "Unable to find color space information in SOLiD read. First observed at read with name = " + read.getName() + " Unfortunately this .bam file can not be recalibrated without color space information because of potential reference bias.");
 
             else
                 return false; // otherwise, just skip the read
@@ -790,12 +787,11 @@ public class RecalUtils {
      * @param offset The offset in the read at which to check
      * @return Returns true if the base was inconsistent with the color space
      */
-    public static boolean isColorSpaceConsistent(final SAMRecord read, final int offset) {
-        final Object attr = read.getAttribute(RecalUtils.COLOR_SPACE_INCONSISTENCY_TAG);
-        if (attr != null) {
-            final byte[] inconsistency = (byte[]) attr;
+    public static boolean isColorSpaceConsistent(final MutableRead read, final int offset) {
+        if (read.hasAttribute(RecalUtils.COLOR_SPACE_INCONSISTENCY_TAG)) {
+            final byte[] inconsistency = read.getAttributeAsByteArray(RecalUtils.COLOR_SPACE_INCONSISTENCY_TAG);
             // NOTE: The inconsistency array is in the direction of the read, not aligned to the reference!
-            if (read.getReadNegativeStrandFlag()) { // Negative direction
+            if (read.isReverseStrand()) { // Negative direction
                 return inconsistency[inconsistency.length - offset - 1] == (byte) 0;
             }
             else { // Forward direction
@@ -803,7 +799,7 @@ public class RecalUtils {
             }
 
             // This block of code is for if you want to check both the offset and the next base for color space inconsistency
-            //if( read.getReadNegativeStrandFlag() ) { // Negative direction
+            //if( read.isReverseStrand() ) { // Negative direction
             //    if( offset == 0 ) {
             //        return inconsistency[0] != 0;
             //    } else {
@@ -832,12 +828,13 @@ public class RecalUtils {
      * reqeustedCovariates list.
      *
      * @param read                The read for which to compute covariate values.
+     * @param header              SAM header for the read
      * @param requestedCovariates The list of requested covariates.
      * @return a matrix with all the covariates calculated for every base in the read
      */
-    public static ReadCovariates computeCovariates(final SAMRecord read, final Covariate[] requestedCovariates) {
-        final ReadCovariates readCovariates = new ReadCovariates(read.getReadLength(), requestedCovariates.length);
-        computeCovariates(read, requestedCovariates, readCovariates);
+    public static ReadCovariates computeCovariates(final MutableRead read, final SAMFileHeader header, final Covariate[] requestedCovariates) {
+        final ReadCovariates readCovariates = new ReadCovariates(read.getLength(), requestedCovariates.length);
+        computeCovariates(read, header, requestedCovariates, readCovariates);
         return readCovariates;
     }
 
@@ -850,14 +847,15 @@ public class RecalUtils {
      * reqeustedCovariates list.
      *
      * @param read                The read for which to compute covariate values.
+     * @param header              SAM header for the read
      * @param requestedCovariates The list of requested covariates.
      * @param resultsStorage      The object to store the covariate values
      */
-    public static void computeCovariates(final SAMRecord read, final Covariate[] requestedCovariates, final ReadCovariates resultsStorage) {
+    public static void computeCovariates(final MutableRead read, final SAMFileHeader header, final Covariate[] requestedCovariates, final ReadCovariates resultsStorage) {
         // Loop through the list of requested covariates and compute the values of each covariate for all positions in this read
         for (int i = 0; i < requestedCovariates.length; i++) {
             resultsStorage.setCovariateIndex(i);
-            requestedCovariates[i].recordValues(read, resultsStorage);
+            requestedCovariates[i].recordValues(read, header, resultsStorage);
         }
     }
 

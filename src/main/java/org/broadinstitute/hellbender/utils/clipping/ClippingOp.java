@@ -3,9 +3,9 @@ package org.broadinstitute.hellbender.utils.clipping;
 import htsjdk.samtools.Cigar;
 import htsjdk.samtools.CigarElement;
 import htsjdk.samtools.CigarOperator;
-import htsjdk.samtools.SAMRecord;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.exceptions.UserException;
+import org.broadinstitute.hellbender.utils.read.MutableRead;
 import org.broadinstitute.hellbender.utils.read.ReadUtils;
 
 import java.util.Iterator;
@@ -42,16 +42,16 @@ public class ClippingOp {
      * @param algorithm    clipping algorithm to use
      * @param originalRead the read to be clipped
      */
-    public SAMRecord apply(ClippingRepresentation algorithm, SAMRecord originalRead) {
-        SAMRecord read = ReadUtils.clone(originalRead);
+    public MutableRead apply(ClippingRepresentation algorithm, MutableRead originalRead) {
+        MutableRead read = (MutableRead)originalRead.copy();
         byte[] quals = read.getBaseQualities();
-        byte[] bases = read.getReadBases();
+        byte[] bases = read.getBases();
         byte[] newBases = new byte[bases.length];
         byte[] newQuals = new byte[quals.length];
 
         switch (algorithm) {
             // important note:
-            //   it's not safe to call read.getReadBases()[i] = 'N' or read.getBaseQualities()[i] = 0
+            //   it's not safe to call read.getBases()[i] = 'N' or read.getBaseQualities()[i] = 0
             //   because you're not guaranteed to get a pointer to the actual array of bytes in the GATKSAMRecord
             case WRITE_NS:
                 for (int i = 0; i < bases.length; i++) {
@@ -62,7 +62,7 @@ public class ClippingOp {
                         newBases[i] = bases[i];
                     }
                 }
-                read.setReadBases(newBases);
+                read.setBases(newBases);
                 break;
             case WRITE_Q0S:
                 for (int i = 0; i < quals.length; i++) {
@@ -87,33 +87,33 @@ public class ClippingOp {
                     }
                 }
                 read.setBaseQualities(newBases);
-                read.setReadBases(newBases);
+                read.setBases(newBases);
                 break;
             case HARDCLIP_BASES:
                 read = hardClip(read, start, stop);
                 break;
 
             case SOFTCLIP_BASES:
-                if (read.getReadUnmappedFlag()) {
+                if (read.isUnmapped()) {
                     // we can't process unmapped reads
                     throw new UserException("Read Clipper cannot soft clip unmapped reads");
                 }
 
-                //System.out.printf("%d %d %d%n", stop, start, read.getReadLength());
+                //System.out.printf("%d %d %d%n", stop, start, read.getLength());
                 int myStop = stop;
-                if ((stop + 1 - start) == read.getReadLength()) {
+                if ((stop + 1 - start) == read.getLength()) {
                     // BAM representation issue -- we can't SOFTCLIP away all bases in a read, just leave it alone
-                    //Walker.logger.info(String.format("Warning, read %s has all bases clip but this can't be represented with SOFTCLIP_BASES, just leaving it alone", read.getReadName()));
+                    //Walker.logger.info(String.format("Warning, read %s has all bases clip but this can't be represented with SOFTCLIP_BASES, just leaving it alone", read.getName()));
                     //break;
                     myStop--; // just decrement stop
                 }
 
-                if (start > 0 && myStop != read.getReadLength() - 1)
-                    throw new RuntimeException(String.format("Cannot apply soft clipping operator to the middle of a read: %s to be clipped at %d-%d", read.getReadName(), start, myStop));
+                if (start > 0 && myStop != read.getLength() - 1)
+                    throw new RuntimeException(String.format("Cannot apply soft clipping operator to the middle of a read: %s to be clipped at %d-%d", read.getName(), start, myStop));
 
                 Cigar oldCigar = read.getCigar();
 
-                int scLeft = 0, scRight = read.getReadLength();
+                int scLeft = 0, scRight = read.getLength();
                 if (start == 0)
                     scLeft = myStop + 1;
                 else
@@ -123,8 +123,8 @@ public class ClippingOp {
                 read.setCigar(newCigar);
 
                 int newClippedStart = getNewAlignmentStartOffset(newCigar, oldCigar);
-                int newStart = read.getAlignmentStart() + newClippedStart;
-                read.setAlignmentStart(newStart);
+                int newStart = read.getStart() + newClippedStart;
+                read.setPosition(read.getContig(), newStart);
 
                 break;
 
@@ -139,8 +139,8 @@ public class ClippingOp {
         return read;
     }
 
-    private SAMRecord revertSoftClippedBases(SAMRecord read) {
-        SAMRecord unclipped = ReadUtils.clone(read);
+    private MutableRead revertSoftClippedBases(MutableRead read) {
+        MutableRead unclipped = (MutableRead)read.copy();
 
         Cigar unclippedCigar = new Cigar();
         int matchesCount = 0;
@@ -158,8 +158,8 @@ public class ClippingOp {
             unclippedCigar.add(new CigarElement(matchesCount, CigarOperator.MATCH_OR_MISMATCH));
 
         unclipped.setCigar(unclippedCigar);
-        final int newStart = read.getAlignmentStart() + calculateAlignmentStartShift(read.getCigar(), unclippedCigar);
-        unclipped.setAlignmentStart(newStart);
+        final int newStart = read.getStart() + calculateAlignmentStartShift(read.getCigar(), unclippedCigar);
+        unclipped.setPosition(unclipped.getContig(), newStart);
 
         if ( newStart <= 0 ) {
             // if the start of the unclipped read occurs before the contig,
@@ -325,28 +325,28 @@ public class ClippingOp {
      * @param stop a stop >= 0 and < read.length.
      * @return a cloned version of read that has been properly trimmed down
      */
-    private SAMRecord hardClip(SAMRecord read, int start, int stop) {
+    private MutableRead hardClip(MutableRead read, int start, int stop) {
 
         // If the read is unmapped there is no Cigar string and neither should we create a new cigar string
-        final CigarShift cigarShift = (read.getReadUnmappedFlag()) ? new CigarShift(new Cigar(), 0, 0) : hardClipCigar(read.getCigar(), start, stop);
+        final CigarShift cigarShift = (read.isUnmapped()) ? new CigarShift(new Cigar(), 0, 0) : hardClipCigar(read.getCigar(), start, stop);
 
         // the cigar may force a shift left or right (or both) in case we are left with insertions
         // starting or ending the read after applying the hard clip on start/stop.
-        final int newLength = read.getReadLength() - (stop - start + 1) - cigarShift.shiftFromStart - cigarShift.shiftFromEnd;
+        final int newLength = read.getLength() - (stop - start + 1) - cigarShift.shiftFromStart - cigarShift.shiftFromEnd;
         final byte[] newBases = new byte[newLength];
         final byte[] newQuals = new byte[newLength];
         final int copyStart = (start == 0) ? stop + 1 + cigarShift.shiftFromStart : cigarShift.shiftFromStart;
 
-        System.arraycopy(read.getReadBases(), copyStart, newBases, 0, newLength);
+        System.arraycopy(read.getBases(), copyStart, newBases, 0, newLength);
         System.arraycopy(read.getBaseQualities(), copyStart, newQuals, 0, newLength);
 
-        final SAMRecord hardClippedRead = ReadUtils.clone(read);
+        final MutableRead hardClippedRead = (MutableRead)read.copy();
 
         hardClippedRead.setBaseQualities(newQuals);
-        hardClippedRead.setReadBases(newBases);
+        hardClippedRead.setBases(newBases);
         hardClippedRead.setCigar(cigarShift.cigar);
         if (start == 0)
-            hardClippedRead.setAlignmentStart(read.getAlignmentStart() + calculateAlignmentStartShift(read.getCigar(), cigarShift.cigar));
+            hardClippedRead.setPosition(read.getContig(), read.getStart() + calculateAlignmentStartShift(read.getCigar(), cigarShift.cigar));
 
         if (hasBaseIndelQualities(read)) {
             final byte[] newBaseInsertionQuals = new byte[newLength];

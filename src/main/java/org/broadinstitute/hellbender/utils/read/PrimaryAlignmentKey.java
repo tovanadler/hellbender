@@ -1,7 +1,5 @@
 package org.broadinstitute.hellbender.utils.read;
 
-import htsjdk.samtools.SAMRecord;
-
 /**
  * It is useful to define a key such that the key will occur at most once among the primary alignments in a given file
  * (assuming the file is valid). The read name + pairing status should be sufficient for this.
@@ -13,11 +11,11 @@ public class PrimaryAlignmentKey implements Comparable<PrimaryAlignmentKey> {
     private final PairStatus pairStatus;
     private final String readName;
 
-    public PrimaryAlignmentKey(final SAMRecord rec) {
-        this.pairStatus = rec.getReadPairedFlag() ?
-                (rec.getSecondOfPairFlag() ? PairStatus.SECOND : PairStatus.FIRST) :
+    public PrimaryAlignmentKey(final Read rec) {
+        this.pairStatus = rec.isPaired() ?
+                (rec.isSecondOfPair() ? PairStatus.SECOND : PairStatus.FIRST) :
                 PairStatus.UNPAIRED;
-        this.readName = rec.getReadName();
+        this.readName = rec.getName();
     }
 
     @Override

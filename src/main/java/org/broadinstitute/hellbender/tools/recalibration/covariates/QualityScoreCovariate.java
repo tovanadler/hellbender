@@ -1,9 +1,10 @@
 package org.broadinstitute.hellbender.tools.recalibration.covariates;
 
-import htsjdk.samtools.SAMRecord;
+import htsjdk.samtools.SAMFileHeader;
 import org.broadinstitute.hellbender.tools.recalibration.ReadCovariates;
 import org.broadinstitute.hellbender.tools.recalibration.RecalibrationArgumentCollection;
 import org.broadinstitute.hellbender.utils.QualityUtils;
+import org.broadinstitute.hellbender.utils.read.MutableRead;
 import org.broadinstitute.hellbender.utils.read.ReadUtils;
 
 /**
@@ -17,7 +18,7 @@ public class QualityScoreCovariate implements Covariate {
     public void initialize(final RecalibrationArgumentCollection RAC) {}
 
     @Override
-    public void recordValues(final SAMRecord read, final ReadCovariates values) {
+    public void recordValues(final MutableRead read, final SAMFileHeader header, final ReadCovariates values) {
         final byte[] baseQualities = read.getBaseQualities();
         final byte[] baseInsertionQualities = ReadUtils.getBaseInsertionQualities(read);
         final byte[] baseDeletionQualities = ReadUtils.getBaseDeletionQualities(read);

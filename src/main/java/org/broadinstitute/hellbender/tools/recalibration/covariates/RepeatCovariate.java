@@ -1,11 +1,12 @@
 package org.broadinstitute.hellbender.tools.recalibration.covariates;
 
-import htsjdk.samtools.SAMRecord;
+import htsjdk.samtools.SAMFileHeader;
 import org.apache.commons.lang3.tuple.MutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 import org.broadinstitute.hellbender.tools.recalibration.ReadCovariates;
 import org.broadinstitute.hellbender.tools.recalibration.RecalibrationArgumentCollection;
 import org.broadinstitute.hellbender.utils.BaseUtils;
+import org.broadinstitute.hellbender.utils.read.MutableRead;
 import org.broadinstitute.hellbender.utils.variant.GATKVariantContextUtils;
 
 import java.util.Arrays;
@@ -33,12 +34,12 @@ public abstract class RepeatCovariate implements Covariate {
     }
 
     @Override
-    public void recordValues(final SAMRecord read, final ReadCovariates values) {
+    public void recordValues(final MutableRead read, final SAMFileHeader header, final ReadCovariates values) {
         // store the original bases and then write Ns over low quality ones
-        final byte[] originalBases = Arrays.copyOf(read.getReadBases(), read.getReadBases().length);
+        final byte[] originalBases = Arrays.copyOf(read.getBases(), read.getBases().length);
 
-        final boolean negativeStrand = read.getReadNegativeStrandFlag();
-        byte[] bases = read.getReadBases();
+        final boolean negativeStrand = read.isReverseStrand();
+        byte[] bases = read.getBases();
         if (negativeStrand)
             bases = BaseUtils.simpleReverseComplement(bases);
 
@@ -57,7 +58,7 @@ public abstract class RepeatCovariate implements Covariate {
         }
 
         // put the original bases back in
-        read.setReadBases(originalBases);
+        read.setBases(originalBases);
 
     }
 

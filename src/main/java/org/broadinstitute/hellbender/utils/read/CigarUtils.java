@@ -45,7 +45,7 @@ public class CigarUtils {
      * @param read the read
      * @return true if it has any M, I or D, false otherwise
      */
-    public static boolean readHasNonClippedBases(SAMRecord read) {
+    public static boolean readHasNonClippedBases(Read read) {
         for (CigarElement cigarElement : read.getCigar().getCigarElements())
             if (cigarElement.getOperator() != CigarOperator.SOFT_CLIP && cigarElement.getOperator() != CigarOperator.HARD_CLIP)
                 return true;
@@ -107,7 +107,7 @@ public class CigarUtils {
         return false;
     }
 
-    public static final int countRefBasesBasedOnCigar(final SAMRecord read, final int cigarStartIndex, final int cigarEndIndex){
+    public static final int countRefBasesBasedOnCigar(final Read read, final int cigarStartIndex, final int cigarEndIndex){
         int result = 0;
         for(int i = cigarStartIndex; i<cigarEndIndex;i++){
             final CigarElement cigarElement = read.getCigar().getCigarElement(i);
@@ -141,7 +141,7 @@ public class CigarUtils {
         return op == CigarOperator.S || op == CigarOperator.H || op == CigarOperator.P;
     }
 
-    public static Cigar reclipCigar(Cigar cigar, SAMRecord read) {
+    public static Cigar reclipCigar(Cigar cigar, Read read) {
         ArrayList<CigarElement> elements = new ArrayList<>();
 
         int i = 0;

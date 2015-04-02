@@ -1,12 +1,13 @@
 package org.broadinstitute.hellbender.tools.recalibration;
 
+import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMReadGroupRecord;
-import htsjdk.samtools.SAMRecord;
 import org.broadinstitute.hellbender.tools.recalibration.covariates.*;
 import org.broadinstitute.hellbender.utils.QualityUtils;
 import org.broadinstitute.hellbender.utils.collections.NestedIntegerArray;
+import org.broadinstitute.hellbender.utils.read.MutableRead;
 import org.broadinstitute.hellbender.utils.recalibration.EventType;
-import org.broadinstitute.hellbender.utils.read.ArtificialSAMUtils;
+import org.broadinstitute.hellbender.utils.read.ArtificialReadUtils;
 import org.broadinstitute.hellbender.utils.read.ReadUtils;
 import org.testng.Assert;
 import org.testng.annotations.BeforeMethod;
@@ -74,8 +75,11 @@ public class RecalibrationReportUnitTest {
 
         final SAMReadGroupRecord rg = new SAMReadGroupRecord("id");
         rg.setPlatform("illumina");
-        final SAMRecord read = ArtificialSAMUtils.createRandomRead(length, false);
-        ReadUtils.setReadGroup(read, rg);
+        final SAMFileHeader header = ArtificialReadUtils.createArtificialSamHeaderWithReadGroup(rg);
+
+        final MutableRead read = ArtificialReadUtils.createRandomRead(header, length, false);
+        read.setReadGroup(rg.getReadGroupId());
+
         final byte [] readQuals = new byte[length];
         for (int i = 0; i < length; i++)
             readQuals[i] = 20;
@@ -83,7 +87,7 @@ public class RecalibrationReportUnitTest {
 
         final int expectedKeys = expectedNumberOfKeys(length, RAC.INDELS_CONTEXT_SIZE, RAC.MISMATCHES_CONTEXT_SIZE);
         int nKeys = 0;                                                                                                  // keep track of how many keys were produced
-        final ReadCovariates rc = RecalUtils.computeCovariates(read, requestedCovariates);
+        final ReadCovariates rc = RecalUtils.computeCovariates(read, header, requestedCovariates);
 
         final RecalibrationTables recalibrationTables = new RecalibrationTables(requestedCovariates);
         final NestedIntegerArray<RecalDatum> rgTable = recalibrationTables.getReadGroupTable();

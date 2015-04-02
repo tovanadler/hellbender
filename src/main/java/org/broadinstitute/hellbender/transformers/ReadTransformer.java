@@ -1,11 +1,11 @@
 package org.broadinstitute.hellbender.transformers;
 
-import htsjdk.samtools.SAMRecord;
+import org.broadinstitute.hellbender.utils.read.MutableRead;
 
 import java.util.function.UnaryOperator;
 
 @FunctionalInterface
-public interface ReadTransformer extends UnaryOperator<SAMRecord> {
+public interface ReadTransformer extends UnaryOperator<MutableRead> {
     //HACK: These methods are a hack to get to get the type system to accept compositions of ReadTransformers.
 
     @SuppressWarnings("overloads")

@@ -67,7 +67,7 @@ public class MarkDuplicatesWithMateCigar extends AbstractMarkDuplicatesCommandLi
         final SAMFileHeader header = headerAndIterator.header;
 
         // Create the output header
-        final SAMFileHeader outputHeader = ReadUtils.clone(header);
+        final SAMFileHeader outputHeader = ReadUtils.cloneSAMFileHeader(header);
         outputHeader.setSortOrder(SAMFileHeader.SortOrder.coordinate);
         for (final String comment : COMMENT) outputHeader.addComment(comment);
 

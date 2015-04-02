@@ -1,7 +1,8 @@
 package org.broadinstitute.hellbender.utils;
 
+import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMReadGroupRecord;
-import htsjdk.samtools.SAMRecord;
+import org.broadinstitute.hellbender.utils.read.Read;
 
 import java.util.Arrays;
 import java.util.LinkedList;
@@ -58,17 +59,18 @@ public enum NGSPlatform {
     }
 
     /**
-     * Convenience get -- get the NGSPlatform from a GATKSAMRecord.
+     * Convenience get -- get the NGSPlatform from a Read.
      *
-     * Just gets the platform from the GATKReadGroupRecord associated with this read.
+     * Just gets the platform from the Read associated with this read.
      *
-     * @param read a non-null GATKSAMRecord
+     * @param read a non-null Read
+     * @param header SAM header for the read
      * @return an NGSPlatform object matching the PL field of the header, of UNKNOWN if there was no match,
      *         if there is no read group for read, or there's no PL field for the read group
      */
-    public static NGSPlatform fromRead(final SAMRecord read) {
+    public static NGSPlatform fromRead(final Read read, final SAMFileHeader header) {
         if ( read == null ) throw new IllegalArgumentException("read cannot be null");
-        final SAMReadGroupRecord rg = read.getReadGroup();
+        final SAMReadGroupRecord rg = header.getReadGroup(read.getReadGroup());
         return rg == null ? UNKNOWN : fromReadGroupPL(rg.getPlatform());
     }
 

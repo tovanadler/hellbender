@@ -42,7 +42,7 @@ public class Haplotype extends Allele implements HasGenomeLocation {
     /**
      * Create a new haplotype with bases
      *
-     * Requires bases.length == cigar.getReadLength()
+     * Requires bases.length == cigar.getLength()
      *
      * @param bases a non-null array of bases
      * @param isRef is this the reference haplotype?

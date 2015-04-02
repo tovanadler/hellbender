@@ -1,13 +1,14 @@
 package org.broadinstitute.hellbender.tools.recalibration;
 
-import htsjdk.samtools.SAMRecord;
+import htsjdk.samtools.SAMFileHeader;
 import org.apache.commons.lang3.tuple.Pair;
 import org.broadinstitute.hellbender.tools.recalibration.covariates.Covariate;
 import org.broadinstitute.hellbender.tools.recalibration.covariates.RepeatLengthCovariate;
 import org.broadinstitute.hellbender.tools.recalibration.covariates.RepeatUnitAndLengthCovariate;
 import org.broadinstitute.hellbender.tools.recalibration.covariates.RepeatUnitCovariate;
 import org.broadinstitute.hellbender.utils.BaseUtils;
-import org.broadinstitute.hellbender.utils.read.ArtificialSAMUtils;
+import org.broadinstitute.hellbender.utils.read.ArtificialReadUtils;
+import org.broadinstitute.hellbender.utils.read.MutableRead;
 import org.broadinstitute.hellbender.utils.variant.GATKVariantContextUtils;
 import org.testng.Assert;
 import org.testng.annotations.BeforeClass;
@@ -130,13 +131,14 @@ public class RepeatCovariatesUnitTest {
 
             final byte[] readQuals = new byte[readLength];
             Arrays.fill(readQuals, (byte) 30);
-            final SAMRecord read = ArtificialSAMUtils.createArtificialRead(readBases.getBytes(), readQuals, readLength + "M");
+            final SAMFileHeader header = ArtificialReadUtils.createArtificialSamHeader();
+            final MutableRead read = ArtificialReadUtils.createArtificialRead(header, readBases.getBytes(), readQuals, readLength + "M");
 
             Covariate[] requestedCovariates = new Covariate[3];
             requestedCovariates[0] = rlCovariate;
             requestedCovariates[1] = ruCovariate;
             requestedCovariates[2] = rurlCovariate;
-            ReadCovariates rc = RecalUtils.computeCovariates(read, requestedCovariates);
+            ReadCovariates rc = RecalUtils.computeCovariates(read, header, requestedCovariates);
 
             // check that the length is correct
             Assert.assertEquals(rc.getMismatchesKeySet().length, readLength);

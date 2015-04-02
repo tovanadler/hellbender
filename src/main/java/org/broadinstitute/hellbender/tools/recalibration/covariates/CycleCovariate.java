@@ -1,11 +1,13 @@
 package org.broadinstitute.hellbender.tools.recalibration.covariates;
 
-import htsjdk.samtools.SAMRecord;
+import htsjdk.samtools.SAMFileHeader;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.recalibration.ReadCovariates;
 import org.broadinstitute.hellbender.tools.recalibration.RecalibrationArgumentCollection;
 import org.broadinstitute.hellbender.utils.NGSPlatform;
 import org.broadinstitute.hellbender.utils.SequencerFlowClass;
+import org.broadinstitute.hellbender.utils.read.MutableRead;
+import org.broadinstitute.hellbender.utils.read.ReadUtils;
 
 /**
  * The Cycle covariate.
@@ -36,16 +38,16 @@ public class CycleCovariate implements Covariate {
 
     // Used to pick out the covariate's value from attributes of the read
     @Override
-    public void recordValues(final SAMRecord read, final ReadCovariates values) {
-        final int readLength = read.getReadLength();
-        final NGSPlatform ngsPlatform = default_platform == null ? NGSPlatform.fromRead(read) : NGSPlatform.fromReadGroupPL(default_platform);
+    public void recordValues(final MutableRead read, final SAMFileHeader header, final ReadCovariates values) {
+        final int readLength = read.getLength();
+        final NGSPlatform ngsPlatform = default_platform == null ? NGSPlatform.fromReadGroupPL(ReadUtils.getPlatformForRead(read, header)) : NGSPlatform.fromReadGroupPL(default_platform);
 
         // Discrete cycle platforms
         if (ngsPlatform.getSequencerType() == SequencerFlowClass.DISCRETE) {
-            final int readOrderFactor = read.getReadPairedFlag() && read.getSecondOfPairFlag() ? -1 : 1;
+            final int readOrderFactor = read.isPaired() && read.isSecondOfPair() ? -1 : 1;
             final int increment;
             int cycle;
-            if (read.getReadNegativeStrandFlag()) {
+            if (read.isReverseStrand()) {
                 cycle = readLength * readOrderFactor;
                 increment = -1 * readOrderFactor;
             }
@@ -65,14 +67,14 @@ public class CycleCovariate implements Covariate {
 
         // Flow cycle platforms
         else if (ngsPlatform.getSequencerType() == SequencerFlowClass.FLOW) {
-            throw new UserException("The platform (" + read.getReadGroup().getPlatform()
-                    + ") associated with read group " + read.getReadGroup()
+            throw new UserException("The platform (" + ReadUtils.getPlatformForRead(read, header)
+                    + ") associated with read group " + ReadUtils.getSAMReadGroupRecordForRead(read, header)
                     + " is not a supported platform.");
         }
         // Unknown platforms
         else {
-            throw new UserException("The platform (" + read.getReadGroup().getPlatform()
-                    + ") associated with read group " + read.getReadGroup()
+            throw new UserException("The platform (" + ReadUtils.getPlatformForRead(read, header)
+                    + ") associated with read group " + ReadUtils.getSAMReadGroupRecordForRead(read, header)
                     + " is not a recognized platform. Allowable options are " + NGSPlatform.knownPlatformsString());
         }
     }

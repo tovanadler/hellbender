@@ -1,12 +1,12 @@
 package org.broadinstitute.hellbender.tools.walkers.bqsr;
 
-import htsjdk.samtools.SAMRecord;
 import org.broadinstitute.hellbender.tools.recalibration.ReadCovariates;
 import org.broadinstitute.hellbender.tools.recalibration.RecalDatum;
 import org.broadinstitute.hellbender.tools.recalibration.RecalUtils;
 import org.broadinstitute.hellbender.tools.recalibration.RecalibrationTables;
 import org.broadinstitute.hellbender.tools.recalibration.covariates.Covariate;
 import org.broadinstitute.hellbender.utils.collections.NestedIntegerArray;
+import org.broadinstitute.hellbender.utils.read.Read;
 import org.broadinstitute.hellbender.utils.recalibration.EventType;
 
 import java.util.Arrays;
@@ -48,11 +48,11 @@ public class RecalibrationEngine {
     public void updateDataForRead( final ReadRecalibrationInfo recalInfo ) {
         if ( finalized ) throw new IllegalStateException("FinalizeData() has already been called");
 
-        final SAMRecord read = recalInfo.getRead();
+        final Read read = recalInfo.getRead();
         final ReadCovariates readCovariates = recalInfo.getCovariatesValues();
         final NestedIntegerArray<RecalDatum> qualityScoreTable = tables.getQualityScoreTable();
 
-        for( int offset = 0; offset < read.getReadBases().length; offset++ ) {
+        for( int offset = 0; offset < read.getBases().length; offset++ ) {
             if( ! recalInfo.skip(offset) ) {
 
                 for (final EventType eventType : EventType.values()) {

@@ -8,7 +8,7 @@ import htsjdk.samtools.util.Locatable;
 import org.apache.commons.io.FileUtils;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.utils.*;
-import org.broadinstitute.hellbender.utils.read.ArtificialSAMUtils;
+import org.broadinstitute.hellbender.utils.read.ArtificialReadUtils;
 import org.broadinstitute.hellbender.utils.test.BaseTest;
 import org.testng.Assert;
 import org.testng.annotations.BeforeClass;
@@ -1098,7 +1098,7 @@ public class IntervalUtilsUnitTest extends BaseTest {
 
     @DataProvider(name="genomeLocsFromLocatablesData")
     public Object[][] genomeLocsFromLocatablesData() {
-        final SAMFileHeader header = ArtificialSAMUtils.createArtificialSamHeader(1, 1, 10);
+        final SAMFileHeader header = ArtificialReadUtils.createArtificialSamHeader(1, 1, 10);
         final GenomeLocParser genomeLocParser = new GenomeLocParser(header.getSequenceDictionary());
 
         return new Object[][] {

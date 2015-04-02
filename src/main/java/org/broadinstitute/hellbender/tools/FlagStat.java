@@ -1,11 +1,12 @@
 package org.broadinstitute.hellbender.tools;
 
-import htsjdk.samtools.SAMRecord;
 import org.broadinstitute.hellbender.cmdline.CommandLineProgramProperties;
 import org.broadinstitute.hellbender.cmdline.programgroups.ReadProgramGroup;
 import org.broadinstitute.hellbender.engine.FeatureContext;
 import org.broadinstitute.hellbender.engine.ReadWalker;
 import org.broadinstitute.hellbender.engine.ReferenceContext;
+import org.broadinstitute.hellbender.utils.read.MutableRead;
+import org.broadinstitute.hellbender.utils.read.Read;
 
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
@@ -21,7 +22,7 @@ public class FlagStat extends ReadWalker {
     private FlagStatus sum = new FlagStatus();
 
     @Override
-    public void apply( SAMRecord read, ReferenceContext referenceContext, FeatureContext featureContext ) {
+    public void apply( MutableRead read, ReferenceContext referenceContext, FeatureContext featureContext ) {
         sum.add(read);
     }
 
@@ -66,33 +67,33 @@ public class FlagStat extends ReadWalker {
                        + with_mate_mapped_to_a_different_chr_maq_greaterequal_than_5 + " with mate mapped to a different chr (mapQ>=5)";
         }
 
-        public FlagStatus add(final SAMRecord read) {
+        public FlagStatus add(final Read read) {
             this.readCount++;
 
-            if (read.getReadFailsVendorQualityCheckFlag()) {
+            if (read.failsVendorQualityCheck()) {
                 this.QC_failure++;
             }
-            if (read.getDuplicateReadFlag()) {
+            if (read.isDuplicate()) {
                 this.duplicates++;
             }
-            if (!read.getReadUnmappedFlag()) {
+            if (!read.isUnmapped()) {
                 this.mapped++;
             }
-            if (read.getReadPairedFlag()) {
+            if (read.isPaired()) {
                 this.paired_in_sequencing++;
 
-                if (read.getSecondOfPairFlag()) {
+                if (read.isSecondOfPair()) {
                     this.read2++;
-                } else if (read.getReadPairedFlag()) {
+                } else if (read.isPaired()) {
                     this.read1++;
                 }
-                if (read.getProperPairFlag()) {
+                if (read.isProperlyPaired()) {
                     this.properly_paired++;
                 }
-                if (!read.getReadUnmappedFlag() && !read.getMateUnmappedFlag()) {
+                if (!read.isUnmapped() && !read.mateIsUnmapped()) {
                     this.with_itself_and_mate_mapped++;
 
-                    if (!read.getReferenceIndex().equals(read.getMateReferenceIndex())) {
+                    if (!read.getContig().equals(read.getMateContig())) {
                         this.with_mate_mapped_to_a_different_chr++;
 
                         if (read.getMappingQuality() >= 5) {
@@ -100,7 +101,7 @@ public class FlagStat extends ReadWalker {
                         }
                     }
                 }
-                if (!read.getReadUnmappedFlag() && read.getMateUnmappedFlag()) {
+                if (!read.isUnmapped() && read.mateIsUnmapped()) {
                     this.singletons++;
                 }
             }

@@ -10,6 +10,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.exceptions.UserException;
+import org.broadinstitute.hellbender.utils.read.Read;
 
 /**
  * Factory class for creating GenomeLocs
@@ -334,6 +335,17 @@ public final class GenomeLocParser {
             // Use Math.max to ensure that end >= start (Picard assigns the end to reads that are entirely within an insertion as start-1)
             final int end = read.getReadUnmappedFlag() ? read.getAlignmentStart() : Math.max(read.getAlignmentEnd(), read.getAlignmentStart());
             return createGenomeLoc(read.getReferenceName(), read.getReferenceIndex(), read.getAlignmentStart(), end, false);
+        }
+    }
+
+    public GenomeLoc createGenomeLoc( final Read read ) {
+        if ( read.isUnmapped() ) {
+            return GenomeLoc.UNMAPPED;
+        }
+        else {
+            // Use Math.max to ensure that end >= start (Picard assigns the end to reads that are entirely within an insertion as start-1)
+            final int end = Math.max(read.getEnd(), read.getStart());
+            return createGenomeLoc(read.getContig(), getSequenceDictionary().getSequenceIndex(read.getContig()), read.getStart(), end, false);
         }
     }
 

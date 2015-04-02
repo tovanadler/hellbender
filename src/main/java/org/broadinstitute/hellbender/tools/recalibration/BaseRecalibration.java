@@ -1,6 +1,6 @@
 package org.broadinstitute.hellbender.tools.recalibration;
 
-import htsjdk.samtools.SAMRecord;
+import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMTag;
 import htsjdk.samtools.SAMUtils;
 import org.apache.logging.log4j.LogManager;
@@ -9,6 +9,7 @@ import org.broadinstitute.hellbender.tools.recalibration.covariates.Covariate;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.utils.MathUtils;
 import org.broadinstitute.hellbender.utils.QualityUtils;
+import org.broadinstitute.hellbender.utils.read.MutableRead;
 import org.broadinstitute.hellbender.utils.recalibration.EventType;
 import org.broadinstitute.hellbender.utils.read.ReadUtils;
 
@@ -75,18 +76,19 @@ public class BaseRecalibration {
      * Qrecal = Qreported + DeltaQ + DeltaQ(pos) + DeltaQ(dinuc) + DeltaQ( ... any other covariate ... )
      *
      * @param read the read to recalibrate
+     * @param header SAM header for the read
      */
-    public void recalibrateRead(final SAMRecord read) {
-        if (emitOriginalQuals && read.getAttribute(SAMTag.OQ.name()) == null) { // Save the old qualities if the tag isn't already taken in the read
+    public void recalibrateRead(final MutableRead read, final SAMFileHeader header) {
+        if (emitOriginalQuals && ! read.hasAttribute(SAMTag.OQ.name())) { // Save the old qualities if the tag isn't already taken in the read
             try {
                 read.setAttribute(SAMTag.OQ.name(), SAMUtils.phredToFastq(read.getBaseQualities()));
             } catch (IllegalArgumentException e) {
-                throw new UserException.MalformedBAM(read, "illegal base quality encountered; " + e.getMessage());
+                throw new UserException.MalformedRead(read, "illegal base quality encountered; " + e.getMessage());
             }
         }
 
-        final ReadCovariates readCovariates = RecalUtils.computeCovariates(read, requestedCovariates);
-        final int readLength = read.getReadLength();
+        final ReadCovariates readCovariates = RecalUtils.computeCovariates(read, header, requestedCovariates);
+        final int readLength = read.getLength();
 
         for (final EventType errorModel : EventType.values()) { // recalibrate all three quality strings
             if (disableIndelQuals && errorModel != EventType.BASE_SUBSTITUTION) {

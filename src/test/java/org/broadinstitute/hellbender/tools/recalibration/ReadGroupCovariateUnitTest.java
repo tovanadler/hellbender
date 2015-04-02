@@ -1,10 +1,10 @@
 package org.broadinstitute.hellbender.tools.recalibration;
 
+import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMReadGroupRecord;
-import htsjdk.samtools.SAMRecord;
 import org.broadinstitute.hellbender.tools.recalibration.covariates.ReadGroupCovariate;
-import org.broadinstitute.hellbender.utils.read.ArtificialSAMUtils;
-import org.broadinstitute.hellbender.utils.read.ReadUtils;
+import org.broadinstitute.hellbender.utils.read.ArtificialReadUtils;
+import org.broadinstitute.hellbender.utils.read.MutableRead;
 import org.testng.Assert;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
@@ -53,10 +53,13 @@ public class ReadGroupCovariateUnitTest {
     }
 
     private static void runTest(final SAMReadGroupRecord rg, final String expected, final ReadGroupCovariate covariate) {
-        SAMRecord read = ArtificialSAMUtils.createRandomRead(10);
-        ReadUtils.setReadGroup(read, rg);
-        ReadCovariates readCovariates = new ReadCovariates(read.getReadLength(), 1);
-        covariate.recordValues(read, readCovariates);
+        final SAMFileHeader header = ArtificialReadUtils.createArtificialSamHeaderWithReadGroup(rg);
+
+        MutableRead read = ArtificialReadUtils.createRandomRead(header, 10);
+        read.setReadGroup(rg.getReadGroupId());
+
+        ReadCovariates readCovariates = new ReadCovariates(read.getLength(), 1);
+        covariate.recordValues(read, header, readCovariates);
         verifyCovariateArray(readCovariates.getMismatchesKeySet(), expected, covariate);
 
     }

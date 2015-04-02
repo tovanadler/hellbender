@@ -91,7 +91,7 @@ public class MarkDuplicates extends AbstractMarkDuplicatesCommandLineProgram {
         final SamHeaderAndIterator headerAndIterator = openInputs();
         final SAMFileHeader header = headerAndIterator.header;
 
-        final SAMFileHeader outputHeader = ReadUtils.clone(header);
+        final SAMFileHeader outputHeader = ReadUtils.cloneSAMFileHeader(header);
         outputHeader.setSortOrder(SAMFileHeader.SortOrder.coordinate);
         for (final String comment : COMMENT) outputHeader.addComment(comment);
 

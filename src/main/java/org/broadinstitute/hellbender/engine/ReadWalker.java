@@ -1,10 +1,10 @@
 package org.broadinstitute.hellbender.engine;
 
-import htsjdk.samtools.SAMRecord;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.cmdline.Argument;
 import org.broadinstitute.hellbender.engine.filters.ReadFilter;
 import org.broadinstitute.hellbender.engine.filters.ReadFilterLibrary;
+import org.broadinstitute.hellbender.utils.read.MutableRead;
 
 import java.util.stream.StreamSupport;
 
@@ -58,8 +58,8 @@ public abstract class ReadWalker extends GATKTool {
         StreamSupport.stream(reads.spliterator(), false)
                 .filter(filter)
                 .forEach(read -> {
-                    final SimpleInterval readInterval = read.getReadUnmappedFlag() ? null :
-                                                                                     new SimpleInterval(read.getReferenceName(), read.getAlignmentStart(), read.getAlignmentEnd());
+                    final SimpleInterval readInterval = read.isUnmapped() ? null :
+                                                                            new SimpleInterval(read.getContig(), read.getStart(), read.getEnd());
                     apply(read,
                           new ReferenceContext(reference, readInterval), // Will create an empty ReferenceContext if reference or readInterval == null
                           new FeatureContext(features, readInterval));   // Will create an empty FeatureContext if features or readInterval == null
@@ -91,13 +91,12 @@ public abstract class ReadWalker extends GATKTool {
      * @param referenceContext Reference bases spanning the current read. Will be an empty, but non-null, context object
      *                         if there is no backing source of reference data (in which case all queries on it will return
      *                         an empty array/iterator). Can request extra bases of context around the current read's interval
-     *                         by invoking {@link org.broadinstitute.hellbender.engine.ReferenceContext#setWindow}
-     *                         on this object before calling {@link org.broadinstitute.hellbender.engine.ReferenceContext#getBases}
+     *                         by invoking {@link ReferenceContext#setWindow} on this object before calling {@link ReferenceContext#getBases}
      * @param featureContext Features spanning the current read. Will be an empty, but non-null, context object
      *                       if there is no backing source of Feature data (in which case all queries on it will return an
      *                       empty List).
      */
-    public abstract void apply( SAMRecord read, ReferenceContext referenceContext, FeatureContext featureContext );
+    public abstract void apply( MutableRead read, ReferenceContext referenceContext, FeatureContext featureContext );
 
     /**
      * Shutdown data sources.

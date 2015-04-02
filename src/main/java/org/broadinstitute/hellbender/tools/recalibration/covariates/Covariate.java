@@ -1,8 +1,9 @@
 package org.broadinstitute.hellbender.tools.recalibration.covariates;
 
-import htsjdk.samtools.SAMRecord;
+import htsjdk.samtools.SAMFileHeader;
 import org.broadinstitute.hellbender.tools.recalibration.ReadCovariates;
 import org.broadinstitute.hellbender.tools.recalibration.RecalibrationArgumentCollection;
+import org.broadinstitute.hellbender.utils.read.MutableRead;
 
 /**
  * The Covariate interface. A Covariate is a feature used in the recalibration that can be picked out of the read.
@@ -22,9 +23,10 @@ public interface Covariate {
      * Calculates covariate values for all positions in the read.
      *
      * @param read   the read to calculate the covariates on.
+     * @param header SAM header for the read
      * @param values the object to record the covariate values for every base in the read.
      */
-    public void recordValues(final SAMRecord read, final ReadCovariates values);
+    public void recordValues(final MutableRead read, final SAMFileHeader header, final ReadCovariates values);
 
     /**
      * Used to get the covariate's value from input (Recalibration Report) file during on-the-fly recalibration
