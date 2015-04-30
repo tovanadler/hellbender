@@ -1,5 +1,6 @@
 package org.broadinstitute.hellbender.utils.diffengine;
 
+import com.google.common.base.Strings;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.utils.Utils;
 
@@ -62,7 +63,7 @@ public final class DiffNode extends DiffValue {
     }
 
     private Collection<DiffElement> getElements(boolean atomicOnly) {
-        List<DiffElement> elts = new ArrayList<DiffElement>();
+        List<DiffElement> elts = new ArrayList<>();
         for ( DiffElement elt : getElements() )
             if ( (atomicOnly && elt.getValue().isAtomic()) || (! atomicOnly && elt.getValue().isCompound()))
                 elts.add(elt);
@@ -140,7 +141,7 @@ public final class DiffNode extends DiffValue {
 
     @Override
     public String toString(int offset) {
-        String off = offset > 0 ? Utils.dupString(' ', offset) : "";
+        String off = offset > 0 ? Strings.repeat(" ", offset) : "";
         StringBuilder b = new StringBuilder();
 
         b.append("(").append("\n");

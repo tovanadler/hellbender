@@ -21,7 +21,7 @@ public final class DiffEngine {
     private final Map<String, DiffableReader> readers = new HashMap<>();
 
     public DiffEngine() {
-        loadDiffableReaders();
+        makeDiffableReaders();
     }
 
     // --------------------------------------------------------------------------------
@@ -296,16 +296,14 @@ public final class DiffEngine {
         return Utils.join(".", parts);
     }
 
-    // --------------------------------------------------------------------------------
-    //
-    // plugin manager
-    //
-    // --------------------------------------------------------------------------------
+    /**
+     * Instantiates all classes known as BAMDiffableReaders.
+     * Note: we hard-wire those classes here.
+     * It's OK. This is not intended to be a generic mechanism.
+     */
+    public void makeDiffableReaders() {
+        final List<Class<? extends DiffableReader>> drClasses =  Arrays.asList(BAMDiffableReader.class, VCFDiffableReader.class, GATKReportDiffableReader.class);
 
-    public void loadDiffableReaders() {
-        List<Class<? extends DiffableReader>> drClasses = new PluginManager<DiffableReader>( DiffableReader.class ).getPlugins();
-
-        logger.info("Loading diffable modules:");
         for (Class<? extends DiffableReader> drClass : drClasses ) {
             logger.info("\t" + drClass.getSimpleName());
 

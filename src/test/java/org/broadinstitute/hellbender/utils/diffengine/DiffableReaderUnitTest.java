@@ -17,8 +17,8 @@ import java.util.Map;
 public class DiffableReaderUnitTest extends BaseTest {
     DiffEngine engine;
 
-    File vcfFile = new File(privateTestDir + "diffTestMaster.vcf");
-    File bamFile = new File(publicTestDir + "exampleBAM.bam");
+    File vcfFile = new File(publicTestDir + "org/broadinstitute/hellbender/utils/diffengine/" + "diffTestMaster.vcf");
+    File bamFile = new File(publicTestDir + "org/broadinstitute/hellbender/utils/diffengine/" + "exampleBAM.bam");
 
     @BeforeClass(enabled = true)
     public void createDiffEngine() {

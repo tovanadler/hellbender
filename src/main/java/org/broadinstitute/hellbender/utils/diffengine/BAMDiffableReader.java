@@ -17,12 +17,12 @@ public final class BAMDiffableReader implements DiffableReader {
     public String getName() { return "BAM"; }
 
     @Override
-    public DiffElement readFromFile(File file, int maxElementsToRead) {
+    public DiffElement readFromFile(final File file, final int maxElementsToRead) {
         final SAMFileReader reader = new SAMFileReader(file, null); // null because we don't want it to look for the index
         reader.setValidationStringency(ValidationStringency.SILENT);
 
-        DiffNode root = DiffNode.rooted(file.getName());
-        SAMRecordIterator iterator = reader.iterator();
+        final DiffNode root = DiffNode.rooted(file.getName());
+        final SAMRecordIterator iterator = reader.iterator();
 
         int count = 0;
         while ( iterator.hasNext() ) {
@@ -53,13 +53,13 @@ public final class BAMDiffableReader implements DiffableReader {
                 readRoot.add(xt.tag, xt.value);
             }
 
-            // add record to root
-            if ( ! root.hasElement(name) )
-                // protect ourselves from malformed files
+            if ( ! root.hasElement(name) )  { // protect ourselves from malformed files
                 root.add(readRoot);
+            }
             count += readRoot.size();
-            if ( count > maxElementsToRead && maxElementsToRead != -1)
+            if ( count > maxElementsToRead && maxElementsToRead != -1) {
                 break;
+            }
         }
 
         reader.close();

@@ -1,7 +1,7 @@
 package org.broadinstitute.hellbender.utils.diffengine;
 
+import com.google.common.base.Strings;
 import org.broadinstitute.hellbender.exceptions.GATKException;
-import org.broadinstitute.hellbender.utils.Utils;
 
 /**
  * An interface that must be implemented to allow us to calculate differences
@@ -51,7 +51,7 @@ public final class DiffElement {
     }
 
     public String toString(int offset) {
-        return (offset > 0 ? Utils.dupString(' ', offset) : 0) + getName() + "=" + getValue().toString(offset);
+        return (offset > 0 ? Strings.repeat(" ", offset) : 0) + getName() + "=" + getValue().toString(offset);
     }
 
     public final String fullyQualifiedName() {

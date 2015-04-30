@@ -1,8 +1,5 @@
 package org.broadinstitute.hellbender.utils.diffengine;
 
-import com.google.java.contract.Ensures;
-import com.google.java.contract.Requires;
-
 import java.io.File;
 
 /**

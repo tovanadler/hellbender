@@ -4,7 +4,7 @@ package org.broadinstitute.hellbender.utils.diffengine;
  * An interface that must be implemented to allow us to calculate differences
  * between structured objects
  */
-public final class DiffValue {
+public class DiffValue {
     private DiffElement binding = null;
     final private Object value;
 
