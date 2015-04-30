@@ -8,6 +8,7 @@ import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Map;
 
@@ -46,7 +47,7 @@ public class DiffableReaderUnitTest extends BaseTest {
     }
 
     @Test(enabled = true, dependsOnMethods = "testPluggableDiffableReaders")
-    public void testVCF1() {
+    public void testVCF1() throws IOException {
         logger.warn("testVCF1");
         DiffableReader vcfReader = engine.getReader("VCF");
         Assert.assertTrue(vcfReader.canRead(vcfFile));
@@ -76,7 +77,7 @@ public class DiffableReaderUnitTest extends BaseTest {
     }
 
     @Test(enabled = true, dependsOnMethods = "testPluggableDiffableReaders")
-    public void testBAM() {
+    public void testBAM() throws IOException {
         logger.warn("testBAM");
         DiffableReader bamReader = engine.getReader("BAM");
         Assert.assertTrue(bamReader.canRead(bamFile));

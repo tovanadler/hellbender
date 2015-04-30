@@ -1,87 +1,81 @@
 package org.broadinstitute.hellbender.utils.diffengine;
 
-import htsjdk.samtools.SAMFileReader;
-import htsjdk.samtools.SAMRecord;
-import htsjdk.samtools.SAMRecordIterator;
-import htsjdk.samtools.ValidationStringency;
+import htsjdk.samtools.*;
 import htsjdk.samtools.util.BlockCompressedInputStream;
+import org.broadinstitute.hellbender.exceptions.GATKException;
 
 import java.io.*;
 import java.util.Arrays;
 
 /**
- * Class implementing diffnode reader for VCF
+ * Class implementing diffnode reader for BAM/SAM/CRAM files.
  */
 public final class BAMDiffableReader implements DiffableReader {
+
+    private static final byte[] BAM_MAGIC = "BAM\1".getBytes();
+
     @Override
     public String getName() { return "BAM"; }
 
     @Override
-    public DiffElement readFromFile(final File file, final int maxElementsToRead) {
-        final SAMFileReader reader = new SAMFileReader(file, null); // null because we don't want it to look for the index
-        reader.setValidationStringency(ValidationStringency.SILENT);
+    public DiffElement readFromFile(final File file, final int maxElementsToRead) throws IOException{
+        try(final SamReader reader = SamReaderFactory.makeDefault().validationStringency(ValidationStringency.SILENT).open(file)) {
 
-        final DiffNode root = DiffNode.rooted(file.getName());
-        final SAMRecordIterator iterator = reader.iterator();
+            final DiffNode root = DiffNode.rooted(file.getName());
+            final SAMRecordIterator iterator = reader.iterator();
 
-        int count = 0;
-        while ( iterator.hasNext() ) {
-            final SAMRecord record = iterator.next();
+            int count = 0;
+            while (iterator.hasNext()) {
+                final SAMRecord record = iterator.next();
 
-            // name is the read name + first of pair
-            String name = record.getReadName().replace('.', '_');
-            if ( record.getReadPairedFlag() ) {
-                name += record.getFirstOfPairFlag() ? "_1" : "_2";
+                // name is the read name + first of pair
+                String name = record.getReadName().replace('.', '_');
+                if (record.getReadPairedFlag()) {
+                    name += record.getFirstOfPairFlag() ? "_1" : "_2";
+                }
+
+                DiffNode readRoot = DiffNode.empty(name, root);
+
+                // add fields
+                readRoot.add("NAME", record.getReadName());
+                readRoot.add("FLAGS", record.getFlags());
+                readRoot.add("RNAME", record.getReferenceName());
+                readRoot.add("POS", record.getAlignmentStart());
+                readRoot.add("MAPQ", record.getMappingQuality());
+                readRoot.add("CIGAR", record.getCigarString());
+                readRoot.add("RNEXT", record.getMateReferenceName());
+                readRoot.add("PNEXT", record.getMateAlignmentStart());
+                readRoot.add("TLEN", record.getInferredInsertSize());
+                readRoot.add("SEQ", record.getReadString());
+                readRoot.add("QUAL", record.getBaseQualityString());
+
+                for (final SAMRecord.SAMTagAndValue xt : record.getAttributes()) {
+                    readRoot.add(xt.tag, xt.value);
+                }
+
+                if (!root.hasElement(name)) { // protect ourselves from malformed files
+                    root.add(readRoot);
+                }
+                count += readRoot.size();
+                if (count > maxElementsToRead && maxElementsToRead != -1) {
+                    break;
+                }
             }
-
-            DiffNode readRoot = DiffNode.empty(name, root);
-
-            // add fields
-            readRoot.add("NAME", record.getReadName());
-            readRoot.add("FLAGS", record.getFlags());
-            readRoot.add("RNAME", record.getReferenceName());
-            readRoot.add("POS", record.getAlignmentStart());
-            readRoot.add("MAPQ", record.getMappingQuality());
-            readRoot.add("CIGAR", record.getCigarString());
-            readRoot.add("RNEXT", record.getMateReferenceName());
-            readRoot.add("PNEXT", record.getMateAlignmentStart());
-            readRoot.add("TLEN", record.getInferredInsertSize());
-            readRoot.add("SEQ", record.getReadString());
-            readRoot.add("QUAL", record.getBaseQualityString());
-
-            for ( SAMRecord.SAMTagAndValue xt : record.getAttributes() ) {
-                readRoot.add(xt.tag, xt.value);
-            }
-
-            if ( ! root.hasElement(name) )  { // protect ourselves from malformed files
-                root.add(readRoot);
-            }
-            count += readRoot.size();
-            if ( count > maxElementsToRead && maxElementsToRead != -1) {
-                break;
-            }
+            return root.getBinding();
         }
-
-        reader.close();
-
-        return root.getBinding();
     }
 
     @Override
-    public boolean canRead(File file) {
-        final byte[] BAM_MAGIC = "BAM\1".getBytes();
+    public boolean canRead(final File file) {
         final byte[] buffer = new byte[BAM_MAGIC.length];
-        try {
-            InputStream fstream = new BufferedInputStream(new FileInputStream(file));
-            if ( !BlockCompressedInputStream.isValidFile(fstream) )
+        try (final InputStream fstream = new BufferedInputStream(new FileInputStream(file))){
+            if ( !BlockCompressedInputStream.isValidFile(fstream) ) {
                 return false;
-            final BlockCompressedInputStream BCIS = new BlockCompressedInputStream(fstream);
-            BCIS.read(buffer, 0, BAM_MAGIC.length);
-            BCIS.close();
+            }
+            final BlockCompressedInputStream bcis = new BlockCompressedInputStream(fstream);
+            bcis.read(buffer, 0, BAM_MAGIC.length);
             return Arrays.equals(buffer, BAM_MAGIC);
-        } catch ( IOException e ) {
-            return false;
-        } catch ( htsjdk.samtools.FileTruncatedException e ) {
+        } catch ( IOException | FileTruncatedException e ) {
             return false;
         }
     }

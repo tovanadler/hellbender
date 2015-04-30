@@ -9,6 +9,7 @@ import org.broadinstitute.hellbender.utils.report.GATKReport;
 import org.broadinstitute.hellbender.utils.report.GATKReportTable;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.PrintStream;
 import java.util.*;
 
@@ -349,11 +350,11 @@ public final class DiffEngine {
     }
 
 
-    public DiffElement createDiffableFromFile(File file) {
+    public DiffElement createDiffableFromFile(File file) throws IOException {
         return createDiffableFromFile(file, -1);
     }
 
-    public DiffElement createDiffableFromFile(File file, int maxElementsToRead) {
+    public DiffElement createDiffableFromFile(File file, int maxElementsToRead) throws IOException {
         DiffableReader reader = findReaderForFile(file);
         if ( reader == null )
             throw new UserException("Unsupported file type: " + file);
@@ -361,7 +362,7 @@ public final class DiffEngine {
             return reader.readFromFile(file, maxElementsToRead);
     }
 
-    public static boolean simpleDiffFiles(File masterFile, File testFile, int maxElementsToRead, DiffEngine.SummaryReportParams params) {
+    public static boolean simpleDiffFiles(File masterFile, File testFile, int maxElementsToRead, DiffEngine.SummaryReportParams params) throws IOException {
         DiffEngine diffEngine = new DiffEngine();
 
         if ( diffEngine.canRead(masterFile) && diffEngine.canRead(testFile) ) {

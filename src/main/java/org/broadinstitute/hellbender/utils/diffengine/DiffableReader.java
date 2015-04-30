@@ -1,6 +1,7 @@
 package org.broadinstitute.hellbender.utils.diffengine;
 
 import java.io.File;
+import java.io.IOException;
 
 /**
  * Interface for readers creating diffable objects from a file
@@ -15,7 +16,7 @@ public interface DiffableReader {
     /**
      * Read up to maxElementsToRead DiffElements from file, and return them.
      */
-    public DiffElement readFromFile(File file, int maxElementsToRead);
+    public DiffElement readFromFile(File file, int maxElementsToRead) throws IOException;
 
     /**
      * Return true if the file can be read into DiffElement objects with this reader. This should
