@@ -15,6 +15,8 @@ public interface DiffableReader {
 
     /**
      * Read up to maxElementsToRead DiffElements from file, and return them.
+     * Note: If value -1 is used for maxElementsToRead, then all elements are to be read from the file.
+     * @throws IOException if there's a problem reading from the file.
      */
     public DiffElement readFromFile(File file, int maxElementsToRead) throws IOException;
 

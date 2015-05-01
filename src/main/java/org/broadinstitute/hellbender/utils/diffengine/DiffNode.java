@@ -24,12 +24,6 @@ public final class DiffNode extends DiffValue {
         super(binding, elements);
     }
 
-    // ---------------------------------------------------------------------------
-    //
-    // constructors
-    //
-    // ---------------------------------------------------------------------------
-
     public static DiffNode rooted(String name) {
         return empty(name, DiffElement.ROOT);
     }
@@ -44,12 +38,6 @@ public final class DiffNode extends DiffValue {
     public static DiffNode empty(String name, DiffValue parent) {
         return empty(name, parent.getBinding());
     }
-
-    // ---------------------------------------------------------------------------
-    //
-    // accessors
-    //
-    // ---------------------------------------------------------------------------
 
     @Override
     public boolean isAtomic() { return false; }
@@ -128,12 +116,6 @@ public final class DiffNode extends DiffValue {
         return count;
     }
 
-    // ---------------------------------------------------------------------------
-    //
-    // toString
-    //
-    // ---------------------------------------------------------------------------
-
     @Override
     public String toString() {
         return toString(0);
@@ -171,12 +153,6 @@ public final class DiffNode extends DiffValue {
 
         return b.toString();
     }
-
-    // --------------------------------------------------------------------------------
-    //
-    // fromString and toOneLineString
-    //
-    // --------------------------------------------------------------------------------
 
     public static DiffElement fromString(String tree) {
         return fromString(tree, DiffElement.ROOT);

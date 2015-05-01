@@ -34,7 +34,7 @@ public final class BAMDiffableReader implements DiffableReader {
                     name += record.getFirstOfPairFlag() ? "_1" : "_2";
                 }
 
-                DiffNode readRoot = DiffNode.empty(name, root);
+                final DiffNode readRoot = DiffNode.empty(name, root);
 
                 // add fields
                 readRoot.add("NAME", record.getReadName());

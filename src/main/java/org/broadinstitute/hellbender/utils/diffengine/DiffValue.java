@@ -55,6 +55,8 @@ public class DiffValue {
     }
 
     public boolean isAtomic() { return true; }
+
     public boolean isCompound() { return ! isAtomic(); }
+
     public int size() { return 1; }
 }

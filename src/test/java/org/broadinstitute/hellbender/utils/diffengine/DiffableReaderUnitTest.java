@@ -13,7 +13,7 @@ import java.util.Arrays;
 import java.util.Map;
 
 /**
- * Basic unit test for DifferableReaders in reduced reads
+ * Basic unit test for DifferableReaders.
  */
 public class DiffableReaderUnitTest extends BaseTest {
     DiffEngine engine;
@@ -21,12 +21,12 @@ public class DiffableReaderUnitTest extends BaseTest {
     File vcfFile = new File(publicTestDir + "org/broadinstitute/hellbender/utils/diffengine/" + "diffTestMaster.vcf");
     File bamFile = new File(publicTestDir + "org/broadinstitute/hellbender/utils/diffengine/" + "exampleBAM.bam");
 
-    @BeforeClass(enabled = true)
+    @BeforeClass
     public void createDiffEngine() {
         engine = new DiffEngine();
     }
 
-    @Test(enabled = true)
+    @Test
     public void testPluggableDiffableReaders() {
         logger.warn("testPluggableDiffableReaders");
         Map<String, DiffableReader> readers = engine.getReaders();
@@ -46,7 +46,7 @@ public class DiffableReaderUnitTest extends BaseTest {
         Assert.assertEquals(value.getValue().getValue(), expected, "Expected to see leaf named " + field + " to have value " + expected + " in rec " + rec + " but got instead " + value.getValue().getValue());
     }
 
-    @Test(enabled = true, dependsOnMethods = "testPluggableDiffableReaders")
+    @Test(dependsOnMethods = "testPluggableDiffableReaders")
     public void testVCF1() throws IOException {
         logger.warn("testVCF1");
         DiffableReader vcfReader = engine.getReader("VCF");
@@ -76,7 +76,7 @@ public class DiffableReaderUnitTest extends BaseTest {
         testLeaf(rec1, "AN", "2");
     }
 
-    @Test(enabled = true, dependsOnMethods = "testPluggableDiffableReaders")
+    @Test(dependsOnMethods = "testPluggableDiffableReaders")
     public void testBAM() throws IOException {
         logger.warn("testBAM");
         DiffableReader bamReader = engine.getReader("BAM");
