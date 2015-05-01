@@ -42,8 +42,8 @@ public class DiffEngineUnitTest extends BaseTest {
 
         private DifferenceTest(String tree1, String tree2, List<String> differences) {
             super(DifferenceTest.class);
-            this.tree1 = DiffNode.fromString(tree1);
-            this.tree2 = DiffNode.fromString(tree2);
+            this.tree1 = DiffElement.fromString(tree1);
+            this.tree2 = DiffElement.fromString(tree2);
             this.differences = differences;
         }
 
@@ -74,7 +74,7 @@ public class DiffEngineUnitTest extends BaseTest {
         logger.warn("Test tree1: " + test.tree1.toOneLineString());
         logger.warn("Test tree2: " + test.tree2.toOneLineString());
 
-        List<Difference> diffs = engine.diff(test.tree1, test.tree2);
+        List<Difference> diffs = test.tree1.diff(test.tree2);
         logger.warn("Test expected diff : " + test.differences);
         logger.warn("Observed diffs     : " + diffs);
     }

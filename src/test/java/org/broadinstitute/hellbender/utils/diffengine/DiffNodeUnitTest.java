@@ -214,7 +214,7 @@ public class DiffNodeUnitTest extends BaseTest {
     @Test(enabled = true, dataProvider = "fromstringdata")
     public void parseFromString(FromStringTest test) {
         logger.warn("Testing from string: " + test.string);
-        DiffElement elt = DiffNode.fromString(test.string);
+        DiffElement elt = DiffElement.fromString(test.string);
         Assert.assertEquals(elt.toOneLineString(), test.expected.toOneLineString());
     }
 }

@@ -23,56 +23,11 @@ public final class DiffEngine {
     private final Map<String, DiffableReader> readers = new HashMap<>();
 
     public DiffEngine() {
-        makeDiffableReaders();
-    }
+        final DiffableReader bamdr = new BAMDiffableReader();
+        readers.put(bamdr.getName(), bamdr);
 
-    // --------------------------------------------------------------------------------
-    //
-    // difference calculation
-    //
-    // --------------------------------------------------------------------------------
-
-    public static List<Difference> diff(final DiffElement master, final DiffElement test) {
-        final DiffValue masterValue = master.getValue();
-        final DiffValue testValue = test.getValue();
-
-        if ( masterValue.isCompound() && masterValue.isCompound() ) {
-            return diff(master.getValueAsNode(), test.getValueAsNode());
-        } else if ( masterValue.isAtomic() && testValue.isAtomic() ) {
-            return diff(masterValue, testValue);
-        } else {
-            // structural difference in types.  one is node, other is leaf
-            return Arrays.asList(new Difference(master, test));
-        }
-    }
-
-    public static List<Difference> diff(final DiffNode master, final DiffNode test) {
-        final Set<String> allNames = new HashSet<>(master.getElementNames());
-        allNames.addAll(test.getElementNames());
-        final List<Difference> diffs = new ArrayList<>();
-
-        for ( final String name : allNames ) {
-            final DiffElement masterElt = master.getElement(name);
-            final DiffElement testElt = test.getElement(name);
-            if ( masterElt == null && testElt == null ) {
-                throw new GATKException("BUG: unexpectedly got two null elements for field: " + name);
-            } else if ( masterElt == null || testElt == null ) { // if either is null, we are missing a value
-                // todo -- should one of these be a special MISSING item?
-                diffs.add(new Difference(masterElt, testElt));
-            } else {
-                diffs.addAll(diff(masterElt, testElt));
-            }
-        }
-
-        return diffs;
-    }
-
-    public static List<Difference> diff(final DiffValue master, final DiffValue test) {
-        if ( master.getValue().equals(test.getValue()) ) {
-            return Collections.emptyList();
-        } else {
-            return Arrays.asList(new Difference(master.getBinding(), test.getBinding()));
-        }
+        final DiffableReader vcfdr = new VCFDiffableReader();
+        readers.put(vcfdr.getName(), vcfdr);
     }
 
     // --------------------------------------------------------------------------------
@@ -119,15 +74,15 @@ public final class DiffEngine {
      * @param params determines how we display the items
      * @param diffs the list of differences to summarize
      */
-    public void reportSummarizedDifferences(final List<Difference> diffs, final SummaryReportParams params ) {
+    public static void reportSummarizedDifferences(final List<Difference> diffs, final SummaryReportParams params ) {
         printSummaryReport(summarizedDifferencesOfPaths(diffs, params.doPairwise, params.maxRawDiffsToSummarize), params );
     }
 
-    final static String[] diffNameToPath(final String diffName) {
+    static String[] diffNameToPath(final String diffName) {
         return diffName.split("\\.");
     }
 
-    List<Difference> summarizedDifferencesOfPathsFromString(final List<String> singletonDiffs) {
+    static List<Difference> summarizedDifferencesOfPathsFromString(final List<String> singletonDiffs) {
         final List<Difference> diffs = new ArrayList<>();
 
         for ( String diff : singletonDiffs ) {
@@ -145,7 +100,7 @@ public final class DiffEngine {
      * @param maxRawDiffsToSummarize
      * @return
      */
-    private Map<String, Difference> initialPairwiseSummaries(final List<? extends Difference> singletonDiffs,
+    private static Map<String, Difference> initialPairwiseSummaries(final List<? extends Difference> singletonDiffs,
                                                              final int maxRawDiffsToSummarize) {
         final Map<String, Difference> summaries = new HashMap<>();
 
@@ -185,7 +140,7 @@ public final class DiffEngine {
      * @param maxRawDiffsToSummarize
      * @return
      */
-    private Map<String, Difference> initialLeafSummaries(final List<? extends Difference> singletonDiffs,
+    private static Map<String, Difference> initialLeafSummaries(final List<? extends Difference> singletonDiffs,
                                                          final int maxRawDiffsToSummarize) {
         final Map<String, Difference> summaries = new HashMap<>();
 
@@ -204,7 +159,7 @@ public final class DiffEngine {
         return summaries;
     }
 
-    private List<Difference> summarizedDifferencesOfPaths(final List<? extends Difference> singletonDiffs,
+    private static List<Difference> summarizedDifferencesOfPaths(final List<? extends Difference> singletonDiffs,
                                                             final boolean doPairwise,
                                                             final int maxRawDiffsToSummarize) {
         final Map<String, Difference> summaries = doPairwise
@@ -225,13 +180,13 @@ public final class DiffEngine {
         return sortedSummaries;
     }
 
-    private void addSummaryIfMissing(final Map<String, Difference> summaries, final Difference diff) {
+    private static void addSummaryIfMissing(final Map<String, Difference> summaries, final Difference diff) {
         if ( ! summaries.containsKey(diff.getPath()) ) {
             summaries.put(diff.getPath(), diff);
         }
     }
 
-    private void printSummaryReport(final List<Difference> sortedSummaries, final SummaryReportParams params ) {
+    private static void printSummaryReport(final List<Difference> sortedSummaries, final SummaryReportParams params ) {
         final List<Difference> toShow = new ArrayList<>();
         int count = 0, count1 = 0;
         for ( final Difference diff : sortedSummaries ) {
@@ -281,8 +236,9 @@ public final class DiffEngine {
         int i = 0;
         for ( ; i < diffPath1.length; i++ ) {
             int j = diffPath1.length - i - 1;
-            if ( ! diffPath1[j].equals(diffPath2[j]) )
+            if ( ! diffPath1[j].equals(diffPath2[j]) ) {
                 break;
+            }
         }
         return i;
     }
@@ -309,18 +265,6 @@ public final class DiffEngine {
         }
     }
 
-    /**
-     * Instantiates all classes known as BAMDiffableReaders.
-     * Note: we hard-wire those classes here.
-     * It's OK. This is not intended to be a generic mechanism.
-     */
-    public void makeDiffableReaders() {
-        final DiffableReader bamdr = new BAMDiffableReader();
-        readers.put(bamdr.getName(), bamdr);
-
-        final DiffableReader vcfdr = new VCFDiffableReader();
-        readers.put(vcfdr.getName(), vcfdr);
-    }
 
     /**
      * Returns an unmodifiable map of reader names to readers.
@@ -376,7 +320,7 @@ public final class DiffEngine {
         if ( diffEngine.canRead(masterFile) && diffEngine.canRead(testFile) ) {
             final DiffElement master = diffEngine.createDiffableFromFile(masterFile, maxElementsToRead);
             final DiffElement test = diffEngine.createDiffableFromFile(testFile, maxElementsToRead);
-            final List<Difference> diffs = diffEngine.diff(master, test);
+            final List<Difference> diffs = master.diff(test);
             diffEngine.reportSummarizedDifferences(diffs, params);
             return true;
         } else {

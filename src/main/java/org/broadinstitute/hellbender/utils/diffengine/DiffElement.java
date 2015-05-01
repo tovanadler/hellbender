@@ -3,9 +3,11 @@ package org.broadinstitute.hellbender.utils.diffengine;
 import com.google.common.base.Strings;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 
+import java.util.Arrays;
+import java.util.List;
+
 /**
- * An interface that must be implemented to allow us to calculate differences
- * between structured objects
+ * Represents an element in the tree of differences.
  */
 public final class DiffElement {
 
@@ -38,6 +40,41 @@ public final class DiffElement {
         this.value.setBinding(this);
     }
 
+    /**
+     * Makes a new element from the given parent and unparsed tree.
+     */
+    private static DiffElement fromString(String tree, DiffElement parent) {
+        // X=(A=A B=B C=(D=D))
+        final String[] parts = tree.split("=", 2);
+        if ( parts.length != 2 ) {
+            throw new GATKException("Unexpected tree structure: " + tree);
+        }
+        final String name = parts[0];
+        final String value = parts[1];
+
+        if ( value.length() == 0 ) {
+            throw new GATKException("Illegal tree structure: " + value + " at " + tree);
+        }
+
+        if ( value.charAt(0) == '(' ) {
+            if ( ! value.endsWith(")") ) {
+                throw new GATKException("Illegal tree structure.  Missing ): " + value + " at " + tree);
+            }
+            final String subtree = value.substring(1, value.length()-1);
+            final DiffNode rec = DiffNode.empty(name, parent);
+            String[] subParts = subtree.split(" ");
+            for ( String subPart : subParts ) {
+                rec.add(fromString(subPart, rec.getBinding()));
+            }
+            return rec.getBinding();
+        } else {
+            return new DiffValue(name, parent, value).getBinding();
+        }
+    }
+
+    public static DiffElement fromString(String tree) {
+        return fromString(tree, DiffElement.ROOT);
+    }
     /**
      * Returns the name of this element.
      */
@@ -109,4 +146,20 @@ public final class DiffElement {
     public int size() {
         return 1 + getValue().size();
     }
+
+    public List<Difference> diff(final DiffElement test) {
+        final DiffValue masterValue = this.getValue();
+        final DiffValue testValue = test.getValue();
+
+        if ( masterValue.isCompound() && masterValue.isCompound() ) {
+            return this.getValueAsNode().diff(test.getValueAsNode());
+        } else if ( masterValue.isAtomic() && testValue.isAtomic() ) {
+            return masterValue.diff(testValue);
+        } else {
+            // structural difference in types.  one is node, other is leaf
+            return Arrays.asList(new Difference(this, test));
+        }
+    }
+
+
 }

@@ -1,5 +1,9 @@
 package org.broadinstitute.hellbender.utils.diffengine;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
 /**
  * An interface that must be implemented to allow us to calculate differences
  * between structured objects
@@ -42,6 +46,7 @@ public class DiffValue {
         return value;
     }
 
+    @Override
     public String toString() {
         return getValue().toString();
     }
@@ -56,7 +61,15 @@ public class DiffValue {
 
     public boolean isAtomic() { return true; }
 
-    public boolean isCompound() { return ! isAtomic(); }
+    public final boolean isCompound() { return ! isAtomic(); }
 
     public int size() { return 1; }
+
+    public List<Difference> diff(final DiffValue test) {
+        if ( this.getValue().equals(test.getValue()) ) {
+            return Collections.emptyList();
+        } else {
+            return Arrays.asList(new Difference(this.getBinding(), test.getBinding()));
+        }
+    }
 }

@@ -20,7 +20,7 @@ public class DifferenceUnitTest extends BaseTest {
         public String difference;
 
         private DifferenceTest(String tree1, String tree2, String difference) {
-            this(DiffNode.fromString(tree1), DiffNode.fromString(tree2), difference);
+            this(DiffElement.fromString(tree1), DiffElement.fromString(tree2), difference);
         }
 
         private DifferenceTest(DiffElement tree1, DiffElement tree2, String difference) {
@@ -42,8 +42,8 @@ public class DifferenceUnitTest extends BaseTest {
     public Object[][] createTrees() {
         new DifferenceTest("A=X", "A=Y", "A:1:X!=Y");
         new DifferenceTest("A=Y", "A=X", "A:1:Y!=X");
-        new DifferenceTest(DiffNode.fromString("A=X"), null, "A:1:X!=MISSING");
-        new DifferenceTest(null, DiffNode.fromString("A=X"), "A:1:MISSING!=X");
+        new DifferenceTest(DiffElement.fromString("A=X"), null, "A:1:X!=MISSING");
+        new DifferenceTest(null, DiffElement.fromString("A=X"), "A:1:MISSING!=X");
         return DifferenceTest.getTests(DifferenceTest.class);
     }
 
