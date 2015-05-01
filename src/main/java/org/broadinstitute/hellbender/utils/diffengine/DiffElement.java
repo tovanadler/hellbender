@@ -72,6 +72,9 @@ public final class DiffElement {
         }
     }
 
+    /**
+     * Makes a new element from parsing the tree. Puts the new element right under the ROOT.
+     */
     public static DiffElement fromString(String tree) {
         return fromString(tree, DiffElement.ROOT);
     }

@@ -26,30 +26,30 @@ public final class BAMDiffableReader implements DiffableReader {
 
             int count = 0;
             while (iterator.hasNext()) {
-                final SAMRecord record = iterator.next();
+                final SAMRecord read = iterator.next();
 
                 // name is the read name + first of pair
-                String name = record.getReadName().replace('.', '_');
-                if (record.getReadPairedFlag()) {
-                    name += record.getFirstOfPairFlag() ? "_1" : "_2";
+                String name = read.getReadName().replace('.', '_');
+                if (read.getReadPairedFlag()) {
+                    name += read.getFirstOfPairFlag() ? "_1" : "_2";
                 }
 
                 final DiffNode readRoot = DiffNode.empty(name, root);
 
                 // add fields
-                readRoot.add("NAME", record.getReadName());
-                readRoot.add("FLAGS", record.getFlags());
-                readRoot.add("RNAME", record.getReferenceName());
-                readRoot.add("POS", record.getAlignmentStart());
-                readRoot.add("MAPQ", record.getMappingQuality());
-                readRoot.add("CIGAR", record.getCigarString());
-                readRoot.add("RNEXT", record.getMateReferenceName());
-                readRoot.add("PNEXT", record.getMateAlignmentStart());
-                readRoot.add("TLEN", record.getInferredInsertSize());
-                readRoot.add("SEQ", record.getReadString());
-                readRoot.add("QUAL", record.getBaseQualityString());
+                readRoot.add("NAME", read.getReadName());
+                readRoot.add("FLAGS", read.getFlags());
+                readRoot.add("RNAME", read.getReferenceName());
+                readRoot.add("POS", read.getAlignmentStart());
+                readRoot.add("MAPQ", read.getMappingQuality());
+                readRoot.add("CIGAR", read.getCigarString());
+                readRoot.add("RNEXT", read.getMateReferenceName());
+                readRoot.add("PNEXT", read.getMateAlignmentStart());
+                readRoot.add("TLEN", read.getInferredInsertSize());
+                readRoot.add("SEQ", read.getReadString());
+                readRoot.add("QUAL", read.getBaseQualityString());
 
-                for (final SAMRecord.SAMTagAndValue xt : record.getAttributes()) {
+                for (final SAMRecord.SAMTagAndValue xt : read.getAttributes()) {
                     readRoot.add(xt.tag, xt.value);
                 }
 
