@@ -31,7 +31,7 @@ public abstract class IntervalArgumentCollection implements ArgumentCollectionDe
      *
      * @return string gathered from the command line -L argument to be parsed into intervals to include
      */
-    abstract protected List<String> getIntervalStrings();
+    abstract public List<String> getIntervalStrings();
 
     /**
      * Add an extra interval string to the intervals to include.

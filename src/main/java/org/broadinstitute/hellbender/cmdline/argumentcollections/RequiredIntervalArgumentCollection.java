@@ -16,7 +16,7 @@ public final class RequiredIntervalArgumentCollection extends IntervalArgumentCo
     final protected List<String> intervalStrings = new ArrayList<>();
 
     @Override
-    protected List<String> getIntervalStrings() {
+    public List<String> getIntervalStrings() {
         return intervalStrings;
     }
 
