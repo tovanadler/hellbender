@@ -140,7 +140,7 @@ jar {
 test {
     // enable TestNG support (default is JUnit)
     useTestNG{
-        excludeGroups 'cloud', 'bucket'
+        excludeGroups  'bucket'
     }
 
     // ensure dataflowRunner is passed to the test VM if specified on the command line
