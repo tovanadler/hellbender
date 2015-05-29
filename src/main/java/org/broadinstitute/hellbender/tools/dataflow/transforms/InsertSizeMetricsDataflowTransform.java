@@ -15,6 +15,7 @@ import htsjdk.samtools.metrics.MetricBase;
 import htsjdk.samtools.metrics.MetricsFile;
 import htsjdk.samtools.util.Histogram;
 import htsjdk.samtools.util.Log;
+import org.apache.avro.reflect.Nullable;
 import org.broadinstitute.hellbender.cmdline.Argument;
 import org.broadinstitute.hellbender.cmdline.ArgumentCollectionDefinition;
 import org.broadinstitute.hellbender.engine.dataflow.DataFlowSAMFn;
@@ -259,9 +260,9 @@ public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSize
     @DefaultCoder(AvroCoder.class)
     public final static class Key {
         private SamPairUtil.PairOrientation orientation;
-        private String readGroup;
-        private String library;
-        private String sample;
+        private @Nullable String readGroup;
+        private @Nullable String library;
+        private @Nullable String sample;
 
         public Key(){};
 

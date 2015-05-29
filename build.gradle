@@ -70,8 +70,7 @@ check.dependsOn installApp
 dependencies {
     compile files("${System.properties['java.home']}/../lib/tools.jar")
 
-
-    compile files('/Users/louisb/Workspace/htsjdk/dist/htsjdk-1.132.jar'
+    compile files('/Users/louisb/Workspace/htsjdk/dist/htsjdk-1.132.jar')
 
     compile 'com.google.cloud.genomics:google-genomics-dataflow:v1beta2-0.10'
     compile 'com.google.cloud.genomics:gatk-tools-java:1.0'
