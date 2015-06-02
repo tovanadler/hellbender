@@ -22,25 +22,6 @@ public class MarkDuplicatesDataflowIntegrationTest extends CommandLineProgramTes
                 {new File(MarkDuplicatesIntegrationTest.TEST_DATA_DIR,"example.chr1.1-1K.unmarkedDups.noDups.bam"), 20, 0},
                 {new File(MarkDuplicatesIntegrationTest.TEST_DATA_DIR,"example.chr1.1-1K.unmarkedDups.bam"), 90, 6},
                 {new File(MarkDuplicatesIntegrationTest.TEST_DATA_DIR,"example.chr1.1-1K.markedDups.bam"), 90, 6},  //90 total reads, 6 dups
-/*
-90 + 0 in total (QC-passed reads + QC-failed reads)
-0 + 0 secondary
-0 + 0 supplimentary
-6 + 0 duplicates
-77 + 0 mapped (85.56%:nan%)
-90 + 0 paired in sequencing
-44 + 0 read1
-46 + 0 read2
-58 + 0 properly paired (64.44%:nan%)
-64 + 0 with itself and mate mapped
-13 + 0 singletons (14.44%:nan%)
-6 + 0 with mate mapped to a different chr
-3 + 0 with mate mapped to a different chr (mapQ>=5)
-*/
-//                {new File(getTestDataDir(),"flag_stat.bam"), 11},
-//                {new File(getTestDataDir(),"dataflow/count_bases.bam"), 7},
-//                {new File(getTestDataDir(),"BQSR/HiSeq.1mb.1RG.2k_lines.bam"), 7},   //NOTE this blows up htsjdk.samtools.SAMException: Illegal MD pattern: 0C0T0T1A61A34 for read 20GAVAAXX100126:8:5:8975:183748 with CIGAR 5M4D96M
-
         };
     }
 

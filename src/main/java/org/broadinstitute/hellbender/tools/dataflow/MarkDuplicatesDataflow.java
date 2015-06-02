@@ -1,7 +1,6 @@
 package org.broadinstitute.hellbender.tools.dataflow;
 
 import com.google.api.client.json.GenericJson;
-import com.google.api.client.repackaged.com.google.common.annotations.VisibleForTesting;
 import com.google.api.services.genomics.model.Read;
 import com.google.cloud.dataflow.sdk.Pipeline;
 import com.google.cloud.dataflow.sdk.coders.*;
@@ -45,7 +44,7 @@ import static org.broadinstitute.hellbender.tools.dataflow.GenomicsReadUtils.isP
         usage="Marks duplicates on dataflow",
         usageShort="Mark Duplicates",
         programGroup = DataFlowProgramGroup.class)
-public class MarkDuplicatesDataflow extends DataflowCommandLineProgram {
+public final class MarkDuplicatesDataflow extends DataflowCommandLineProgram {
 
     //Bases below this quality will not be included in picking the best read from a set of duplicates.
     private static final int MIN_BASE_QUAL = 15;
@@ -62,7 +61,7 @@ public class MarkDuplicatesDataflow extends DataflowCommandLineProgram {
     protected IntervalArgumentCollection intervalArgumentCollection = new OptionalIntervalArgumentCollection();
 
     @Override
-    protected final void setupPipeline(final Pipeline pipeline) {
+    protected void setupPipeline(final Pipeline pipeline) {
         final ReadsSource readsSource = new ReadsSource(bam, pipeline);
         final SAMFileHeader header = readsSource.getHeader();
         final SAMSequenceDictionary sequenceDictionary = header.getSequenceDictionary();
@@ -72,199 +71,247 @@ public class MarkDuplicatesDataflow extends DataflowCommandLineProgram {
         final PCollectionView<SAMFileHeader> headerPcolView = pipeline.apply(Create.of(header)).apply(View.<SAMFileHeader>asSingleton());
 
         final PCollection<Read> preads = readsSource.getReadPCollection(intervals);
-        final PCollectionList<Read> readsPartitioned = partitionReads(preads);
-
-        final PCollection<Read> fragments = readsPartitioned.get(ReadsPartition.PRIMARY.ordinal());
-        final PCollection<Read> fragmentsTransformed = transformFragments(headerPcolView, fragments);
-
-        final PCollection<Read> pairs = readsPartitioned.get(ReadsPartition.PRIMARY.ordinal());
-        final PCollection<Read> pairsTransformed = transformReads(headerPcolView, pairs);
-
-        //no work on those
-        final PCollection<Read> not_primary = readsPartitioned.get(ReadsPartition.NOT_PRIMARY.ordinal());
-
-        final PCollection<Read> results;
-        if (true) {
-            results = PCollectionList.of(fragmentsTransformed).and(pairsTransformed).and(not_primary).apply(Flatten.<Read>pCollections());
-        } else {
-            results = preads;
-        }
+        final PCollection<Read> results = preads.apply(new MarkDuplicatesDataflowTransform(headerPcolView));
 
         final PCollection<String> pstrings = results.apply(DataflowUtils.convertToString());
         pstrings.apply(TextIO.Write.to(outputFile));
     }
 
     /**
-     * (1) Reads are grouped by read group and read name.
-     * (2) Reads are then paired together as follows:
-     *   (a) The remaining reads (one per fragment key) are coordinate-sorted and paired
-     *       consecutively together and emitted.
-     *   (b) If a read is leftover, it is emitted, unmodified, as an unpaired end.
-     * (3) Paired ends are grouped by a similar key as above but using both reads.
-     * (4) Any unpaired end is emitted, unmodified.
-     * (5) The remained paired ends are scored and all but the highest scoring are marked as
-     *     duplicates. Both reads in the pair are emitted.
+     * The main trasform for MarkDuplicates. Takes reads, returned reads with some reads marked as duplicates.
      */
-    private PCollection<Read> transformReads(final PCollectionView<SAMFileHeader> headerPcolView, final PCollection<Read> pairs) {
-        final PCollection<KV<String, Iterable<Read>>> pairsGroupedByKey = groupPairsByKey(pairs, headerPcolView);
-        final PTransform<PCollection<? extends KV<String, Iterable<Read>>>, PCollection<KV<String, PairedEnds>>> markGroupedDuplicatePairs = markGroupedDuplicatePairs(headerPcolView);
-        final PTransform<PCollection<? extends KV<String, Iterable<PairedEnds>>>, PCollection<Read>> markPairedEnds = markPairedEnds();
+    private static final class MarkDuplicatesDataflowTransform extends PTransform<PCollection<Read>, PCollection<Read>> {
 
-        return pairsGroupedByKey
-                .apply(markGroupedDuplicatePairs)
-                .setCoder(KvCoder.of(StringUtf8Coder.of(), PairedEndsCoder.of()))
-                .apply(GroupByKey.<String, PairedEnds>create())
-                .apply(markPairedEnds);
-    }
+        private static final long serialVersionUID = 1l;
 
-    private PTransform<PCollection<? extends KV<String, Iterable<PairedEnds>>>, PCollection<Read>> markPairedEnds() {
-        return ParDo
-                .named("mark paired ends")
-                .of(new DoFn<KV<String, Iterable<PairedEnds>>, Read>() {
-                    private static final long serialVersionUID = 1l;
+        //private vs non-primary alignments
+        private enum ReadsPartition {
+            PRIMARY, NOT_PRIMARY
+        }
 
-                    @Override
-                    public void processElement(final ProcessContext context) throws Exception {
-                        final ImmutableListMultimap<Boolean, PairedEnds> paired = Multimaps.index(context.element().getValue(), pair -> pair.second() != null);
+        /**
+         *  The header for all reads processed.
+        */
+        private final PCollectionView<SAMFileHeader> header;
 
-                        // As in Picard, unpaired ends left alone.
-                        for (final PairedEnds pair : paired.get(false)) {
-                            context.output(pair.first());
-                        }
+        public MarkDuplicatesDataflowTransform( final PCollectionView<SAMFileHeader> header ) {
+            this.header = header;
+        }
 
-                        final List<PairedEnds> scored = Ordering.natural().reverse().onResultOf((PairedEnds pair) -> pair.score()).immutableSortedCopy(paired.get(true));
-                        final PairedEnds best = Iterables.getFirst(scored, null);
-                        if (best != null) {
-                            context.output(best.first());
-                            context.output(best.second());
-                        }
-                        for (final PairedEnds pair : Iterables.skip(scored, 1)) {
-                            Read record = pair.first();
-                            record.setDuplicateFragment(true);
-                            context.output(record);
-                            record = pair.second();
-                            record.setDuplicateFragment(true);
-                            context.output(record);
-                        }
+        @Override
+        public PCollection<Read> apply( final PCollection<Read> preads ) {
+            final PCollectionList<Read> readsPartitioned = partitionReadsByPrimaryNonPrimaryAlignment(preads);
+
+            final PCollection<Read> fragments = readsPartitioned.get(ReadsPartition.PRIMARY.ordinal());
+            final PCollection<Read> fragmentsTransformed = transformFragments(header, fragments);
+
+            final PCollection<Read> pairs = readsPartitioned.get(ReadsPartition.PRIMARY.ordinal());
+            final PCollection<Read> pairsTransformed = transformReads(header, pairs);
+
+            //no work on those
+            final PCollection<Read> not_primary = readsPartitioned.get(ReadsPartition.NOT_PRIMARY.ordinal());
+
+            return PCollectionList.of(fragmentsTransformed).and(pairsTransformed).and(not_primary).apply(Flatten.<Read>pCollections());
+        }
+
+        private static PCollectionList<Read> partitionReadsByPrimaryNonPrimaryAlignment(PCollection<Read> preads) {
+            return preads.apply(Partition.of(2, new PartitionFn<Read>() {
+                private static final long serialVersionUID = 1l;
+
+                @Override
+                    public int partitionFor(final Read read, final int n) {
+                        return isPrimaryAlignment(read) ? ReadsPartition.PRIMARY.ordinal() : ReadsPartition.NOT_PRIMARY.ordinal();
                     }
-                });
-    }
+                }));
+        }
+        /**
+         * (1) Reads are grouped by read group and read name.
+         * (2) Reads are then paired together as follows:
+         *   (a) The remaining reads (one per fragment key) are coordinate-sorted and paired
+         *       consecutively together and emitted.
+         *   (b) If a read is leftover, it is emitted, unmodified, as an unpaired end.
+         * (3) Paired ends are grouped by a similar key as above but using both reads.
+         * (4) Any unpaired end is emitted, unmodified.
+         * (5) The remained paired ends are scored and all but the highest scoring are marked as
+         *     duplicates. Both reads in the pair are emitted.
+         */
+        private PCollection<Read> transformReads(final PCollectionView<SAMFileHeader> headerPcolView, final PCollection<Read> pairs) {
+            final PCollection<KV<String, Iterable<Read>>> pairsGroupedByKey = groupPairsByKey(pairs, headerPcolView);
+            final PTransform<PCollection<? extends KV<String, Iterable<Read>>>, PCollection<KV<String, PairedEnds>>> markGroupedDuplicatePairs = markGroupedDuplicatePairs(headerPcolView);
+            final PTransform<PCollection<? extends KV<String, Iterable<PairedEnds>>>, PCollection<Read>> markPairedEnds = markPairedEnds();
 
-    private PTransform<PCollection<? extends KV<String, Iterable<Read>>>, PCollection<KV<String, PairedEnds>>> markGroupedDuplicatePairs(final PCollectionView<SAMFileHeader> headerPcolView) {
-        final PTransform<PCollection<? extends KV<String, Iterable<Read>>>, PCollection<KV<String, PairedEnds>>> putIntoPairedEnds = ParDo
-                .named("pair ends")
-                .withSideInputs(Collections.singletonList(headerPcolView))
-                .of(new DoFn<KV<String, Iterable<Read>>, KV<String, PairedEnds>>() {
-                    @Override
-                    public void processElement(final ProcessContext context) throws Exception {
-                        final SAMFileHeader header = context.sideInput(headerPcolView);
-                        final List<Read> sorted = Lists.newArrayList(context.element().getValue());
-                        sorted.sort(new CoordinateSorted(header));
-                        PairedEnds pair = null;
-                        for (final Read record : sorted) {
-                            if (pair == null) {
-                                pair = PairedEnds.of(record);
-                            } else {
-                                pair.and(record);
-                                context.output(KV.of(pair.key(header), pair));
-                                pair = null;
-                            }
-                        }
-                        if (pair != null) {
-                            context.output(KV.of(pair.key(header), pair));
-                        }
-                    }
-                });
-        return putIntoPairedEnds;
-    }
+            return pairsGroupedByKey
+                    .apply(markGroupedDuplicatePairs)
+                    .setCoder(KvCoder.of(StringUtf8Coder.of(), PairedEndsCoder.of()))
+                    .apply(GroupByKey.<String, PairedEnds>create())
+                    .apply(markPairedEnds);
+        }
 
-    @VisibleForTesting
-    /**
-     * Groups pairs by keys - keys are tuples of (library, contig, position, orientation).
-     */
-    PCollection<KV<String, Iterable<Read>>> groupPairsByKey(final PCollection<Read> pairs, final PCollectionView<SAMFileHeader> headerPcolView) {
-        final PTransform<PCollection<? extends Read>, PCollection<KV<String, Read>>> makeKeysForPairs =
-                ParDo.named("make keys for pairs")
-                        .withSideInputs(Collections.singletonList(headerPcolView))
-                        .of(new DoFn<Read, KV<String, Read>>() {
-                            private static final long serialVersionUID = 1l;
+        /**
+         * Groups pairs by keys - keys are tuples of (library, contig, position, orientation).
+         */
+        private PCollection<KV<String, Iterable<Read>>> groupPairsByKey(final PCollection<Read> pairs, final PCollectionView<SAMFileHeader> headerPcolView) {
+            final PTransform<PCollection<? extends Read>, PCollection<KV<String, Read>>> makeKeysForPairs =
+                    ParDo.named("make keys for pairs")
+                            .withSideInputs(Collections.singletonList(headerPcolView))
+                            .of(new DoFn<Read, KV<String, Read>>() {
+                                private static final long serialVersionUID = 1l;
 
-                            @Override
-                            public void processElement(final ProcessContext context) throws Exception {
-                                final Read record = context.element();
-                                if (GenomicsReadUtils.isPaired(record)) {
-                                    final SAMFileHeader h = context.sideInput(headerPcolView);
-                                    final String key = MarkDuplicatesReadsKey.keyForPair(h, record);
-                                    final KV<String, Read> kv = KV.of(key, record);
-                                    context.output(kv);
+                                @Override
+                                public void processElement(final ProcessContext context) throws Exception {
+                                    final Read record = context.element();
+                                    if (GenomicsReadUtils.isPaired(record)) {
+                                        final SAMFileHeader h = context.sideInput(headerPcolView);
+                                        final String key = MarkDuplicatesReadsKey.keyForPair(h, record);
+                                        final KV<String, Read> kv = KV.of(key, record);
+                                        context.output(kv);
+                                    }
                                 }
-                            }
-                        });
-        return pairs.apply(makeKeysForPairs).apply(GroupByKey.<String, Read>create());
-    }
+                            });
+            return pairs.apply(makeKeysForPairs).apply(GroupByKey.<String, Read>create());
+        }
 
-    //--------------
-
-
-    private PCollectionList<Read> partitionReads(PCollection<Read> preads) {
-        return preads.apply(
-                    Partition.of(2, new PartitionFn<Read>() {
+        private PTransform<PCollection<? extends KV<String, Iterable<Read>>>, PCollection<KV<String, PairedEnds>>> markGroupedDuplicatePairs(final PCollectionView<SAMFileHeader> headerPcolView) {
+            final PTransform<PCollection<? extends KV<String, Iterable<Read>>>, PCollection<KV<String, PairedEnds>>> putIntoPairedEnds = ParDo
+                    .named("pair ends")
+                    .withSideInputs(Collections.singletonList(headerPcolView))
+                    .of(new DoFn<KV<String, Iterable<Read>>, KV<String, PairedEnds>>() {
                         @Override
-                        public int partitionFor(final Read read, final int n) {
-                            return isPrimaryAlignment(read) ? ReadsPartition.PRIMARY.ordinal() : ReadsPartition.NOT_PRIMARY.ordinal();
-                        }
-                    }));
-    }
-
-    @VisibleForTesting
-    /**
-     * Takes the reads,
-     * group them by library, contig, position and orientation,
-     * within each group
-     *   (a) if there are only fragments, mark all but the highest scoring as duplicates, or,
-     *   (b) if at least one is marked as paired, mark all fragments as duplicates.
-     *  Note: Emit only the fragments, as the paired reads are handled separately.
-     */
-    PCollection<Read> transformFragments(final PCollectionView<SAMFileHeader> headerPcolView, final PCollection<Read> fragments) {
-        final PCollection<KV<String, Iterable<Read>>> readsGroupedByKey = groupReadsByKey(fragments, headerPcolView);
-        final PTransform<PCollection<? extends KV<String, Iterable<Read>>>, PCollection<Read>> markGroupedDuplicateFragments = markGroupedDuplicateFragments();
-        return readsGroupedByKey
-                .apply(markGroupedDuplicateFragments);//no need to set up coder for Read (uses GenericJsonCoder)
-    }
-
-    private PTransform<PCollection<? extends KV<String, Iterable<Read>>>, PCollection<Read>> markGroupedDuplicateFragments() {
-        return ParDo.named("mark dups")
-                .of(new DoFn<KV<String, Iterable<Read>>, Read>() {
-                    private static final long serialVersionUID = 1l;
-
-                    @Override
-                    public void processElement(final ProcessContext context) throws Exception {
-                        final Map<Boolean, List<Read>> byPairing = StreamSupport.stream(context.element().getValue().spliterator(), false).collect(Collectors.partitioningBy(
-                                read -> GenomicsReadUtils.isPaired(read)
-                        ));
-                        //
-                        // The existence of any paired end means we mark all fragments as duplicates.
-                        // Otherwise, mark all but the highest scoring fragment.
-                        // Note the we emit only fragments from this mapper.
-                        if (byPairing.get(true).isEmpty()) {
-                            final List<Read> frags = Ordering.natural().reverse().onResultOf((Read read) -> score(read)).immutableSortedCopy(byPairing.get(false));
-                            if (!frags.isEmpty()) {
-                                context.output(Iterables.getFirst(frags, null));
-                                for (final Read record : Iterables.skip(frags, 1)) {
-                                    record.setDuplicateFragment(true);
-                                    context.output(record);
+                        public void processElement(final ProcessContext context) throws Exception {
+                            final SAMFileHeader header = context.sideInput(headerPcolView);
+                            final List<Read> sorted = Lists.newArrayList(context.element().getValue());
+                            sorted.sort(new CoordinateOrder(header));
+                            PairedEnds pair = null;
+                            for (final Read record : sorted) {
+                                if (pair == null) {
+                                    pair = PairedEnds.of(record);
+                                } else {
+                                    pair.and(record);
+                                    context.output(KV.of(pair.key(header), pair));
+                                    pair = null;
                                 }
                             }
-                        } else {
-                            for (final Read record : byPairing.get(false)) {
+                            if (pair != null) {
+                                context.output(KV.of(pair.key(header), pair));
+                            }
+                        }
+                    });
+            return putIntoPairedEnds;
+        }
+
+
+        private PTransform<PCollection<? extends KV<String, Iterable<PairedEnds>>>, PCollection<Read>> markPairedEnds() {
+            return ParDo
+                    .named("mark paired ends")
+                    .of(new DoFn<KV<String, Iterable<PairedEnds>>, Read>() {
+                        private static final long serialVersionUID = 1l;
+
+                        @Override
+                        public void processElement(final ProcessContext context) throws Exception {
+                            final ImmutableListMultimap<Boolean, PairedEnds> paired = Multimaps.index(context.element().getValue(), pair -> pair.second() != null);
+
+                            // As in Picard, unpaired ends left alone.
+                            for (final PairedEnds pair : paired.get(false)) {
+                                context.output(pair.first());
+                            }
+
+                            //order by score
+                            final List<PairedEnds> scored = Ordering.natural().reverse().onResultOf((PairedEnds pair) -> pair.score()).immutableSortedCopy(paired.get(true));
+                            final PairedEnds best = Iterables.getFirst(scored, null);
+                            if (best != null) {
+                                context.output(best.first());
+                                context.output(best.second());
+                            }
+                            //Mark everyone who's not best as a duplicate
+                            for (final PairedEnds pair : Iterables.skip(scored, 1)) {
+                                Read record = pair.first();
+                                record.setDuplicateFragment(true);
+                                context.output(record);
+
+                                record = pair.second();
                                 record.setDuplicateFragment(true);
                                 context.output(record);
                             }
                         }
-                    }
-                });
+                    });
+        }
+
+
+        /**
+         * Takes the reads,
+         * group them by library, contig, position and orientation,
+         * within each group
+         *   (a) if there are only fragments, mark all but the highest scoring as duplicates, or,
+         *   (b) if at least one is marked as paired, mark all fragments as duplicates.
+         *  Note: Emit only the fragments, as the paired reads are handled separately.
+         */
+        PCollection<Read> transformFragments(final PCollectionView<SAMFileHeader> headerPcolView, final PCollection<Read> fragments) {
+            final PCollection<KV<String, Iterable<Read>>> readsGroupedByKey = groupReadsByKey(fragments, headerPcolView);
+            final PTransform<PCollection<? extends KV<String, Iterable<Read>>>, PCollection<Read>> markGroupedDuplicateFragments = markGroupedDuplicateFragments();
+            return readsGroupedByKey
+                    .apply(markGroupedDuplicateFragments);//no need to set up coder for Read (uses GenericJsonCoder)
+        }
+
+        private PTransform<PCollection<? extends KV<String, Iterable<Read>>>, PCollection<Read>> markGroupedDuplicateFragments() {
+            return ParDo.named("mark dups")
+                    .of(new DoFn<KV<String, Iterable<Read>>, Read>() {
+                        private static final long serialVersionUID = 1l;
+
+                        @Override
+                        public void processElement(final ProcessContext context) throws Exception {
+                            final Map<Boolean, List<Read>> byPairing = StreamSupport.stream(context.element().getValue().spliterator(), false).collect(Collectors.partitioningBy(
+                                    read -> GenomicsReadUtils.isPaired(read)
+                            ));
+                            //
+                            // The existence of any paired end means we mark all fragments as duplicates.
+                            // Otherwise, mark all but the highest scoring fragment.
+                            // Note the we emit only fragments from this mapper.
+                            if (byPairing.get(true).isEmpty()) {
+                                final List<Read> frags = Ordering.natural().reverse().onResultOf((Read read) -> score(read)).immutableSortedCopy(byPairing.get(false));
+                                if (!frags.isEmpty()) {
+                                    context.output(Iterables.getFirst(frags, null));
+                                    //Mark everyone who's not best as a duplicate
+                                    for (final Read record : Iterables.skip(frags, 1)) {
+                                        record.setDuplicateFragment(true);
+                                        context.output(record);
+                                    }
+                                }
+                            } else {
+                                for (final Read record : byPairing.get(false)) {
+                                    record.setDuplicateFragment(true);
+                                    context.output(record);
+                                }
+                            }
+                        }
+                    });
+        }
+
+        /**
+         * Groups reads by keys - keys are tuples of (library, contig, position, orientation).
+         */
+        PCollection<KV<String, Iterable<Read>>> groupReadsByKey(final PCollection<Read> fragments, final PCollectionView<SAMFileHeader> headerPcolView) {
+            final PTransform<PCollection<? extends Read>, PCollection<KV<String, Read>>> makeKeysForFragments =
+                    ParDo.named("make keys for reads")
+                            .withSideInputs(Collections.singletonList(headerPcolView))
+                            .of(new DoFn<Read, KV<String, Read>>() {
+                                @Override
+                                public void processElement(final ProcessContext context) throws Exception {
+                                    final Read record = context.element();
+                                    record.setDuplicateFragment(false);
+                                    final SAMFileHeader h = context.sideInput(headerPcolView);
+                                    final String key = MarkDuplicatesReadsKey.keyForFragment(h, record);
+                                    final KV<String, Read> kv = KV.of(key, record);
+                                    context.output(kv);
+                                }
+                            });
+            return fragments.apply(makeKeysForFragments)
+                    .apply(GroupByKey.<String, Read>create());
+        }
     }
 
+    /**
+     * How to assign a score to the read in MarkDuplicates (so that we pick the best one to be the non-duplicate).
+     */
     //Note: copied from htsjdk.samtools.DuplicateScoringStrategy
     private static int score(final Read record) {
         if (record == null) {
@@ -274,41 +321,20 @@ public class MarkDuplicatesDataflow extends DataflowCommandLineProgram {
         }
     }
 
-    @VisibleForTesting
     /**
-     * Groups reads by keys - keys are tuples of (library, contig, position, orientation).
+     * Returns the list of intervals from the given sequence dictionary.
      */
-    PCollection<KV<String, Iterable<Read>>> groupReadsByKey(final PCollection<Read> fragments, final PCollectionView<SAMFileHeader> headerPcolView) {
-        final PTransform<PCollection<? extends Read>, PCollection<KV<String, Read>>> makeKeysForFragments =
-                ParDo.named("make keys for reads")
-                        .withSideInputs(Collections.singletonList(headerPcolView))
-                        .of(new DoFn<Read, KV<String, Read>>() {
-                            @Override
-                            public void processElement(final ProcessContext context) throws Exception {
-                                final Read record = context.element();
-                                record.setDuplicateFragment(false);
-                                final SAMFileHeader h = context.sideInput(headerPcolView);
-                                final String key = MarkDuplicatesReadsKey.keyForFragment(h, record);
-                                final KV<String, Read> kv = KV.of(key, record);
-                                context.output(kv);
-                            }
-                        });
-        return fragments.apply(makeKeysForFragments)
-                .apply(GroupByKey.<String, Read>create());
-    }
-
-    private enum ReadsPartition {
-        PRIMARY, NOT_PRIMARY
-    }
-
-    private List<SimpleInterval> getAllIntervalsForReference(final SAMSequenceDictionary sequenceDictionary) {
+    private static List<SimpleInterval> getAllIntervalsForReference(final SAMSequenceDictionary sequenceDictionary) {
     return GenomeLocSortedSet.createSetFromSequenceDictionary(sequenceDictionary)
             .stream()
             .map(SimpleInterval::new)
             .collect(Collectors.toList());
     }
 
-    public static final class PairedEnds extends GenericJson{
+    /**
+     * Struct-like class to store information about the paired reads for mark duplicates.
+     */
+    private static final class PairedEnds extends GenericJson{
         private Read first, second;
 
         PairedEnds(final Read first) {
@@ -351,7 +377,10 @@ public class MarkDuplicatesDataflow extends DataflowCommandLineProgram {
         }
     }
 
-    public static class PairedEndsCoder extends AtomicCoder<PairedEnds> {
+    /**
+     * Special coder for the PairedEnds class.
+     */
+    private static final class PairedEndsCoder extends AtomicCoder<PairedEnds> {
         private final KvCoder<Read, Read> delegate =
                 KvCoder.of(GenericJsonCoder.of(Read.class), GenericJsonCoder.of(Read.class));
 
@@ -391,13 +420,11 @@ public class MarkDuplicatesDataflow extends DataflowCommandLineProgram {
         }
     }
 
-    // Necessary since the records that are passed around in this transform have empty headers
-    // as it's not necessary to pass all that extra data around per record.
-    public static final class CoordinateSorted implements Comparator<Read>, Serializable {
+    private static final class CoordinateOrder implements Comparator<Read>, Serializable {
         private static final long serialVersionUID = 1l;
         private final SAMFileHeader header;
 
-        public CoordinateSorted(final SAMFileHeader header) {
+        public CoordinateOrder(final SAMFileHeader header) {
             this.header = header;
         }
 
