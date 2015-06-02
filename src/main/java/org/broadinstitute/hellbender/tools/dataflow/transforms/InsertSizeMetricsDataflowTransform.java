@@ -3,14 +3,14 @@ package org.broadinstitute.hellbender.tools.dataflow.transforms;
 
 import com.google.api.client.json.GenericJson;
 import com.google.api.services.genomics.model.Read;
-import com.google.cloud.dataflow.sdk.coders.AvroCoder;
-import com.google.cloud.dataflow.sdk.coders.DefaultCoder;
+import com.google.cloud.dataflow.sdk.coders.*;
 import com.google.cloud.dataflow.sdk.transforms.Combine;
 import com.google.cloud.dataflow.sdk.transforms.Filter;
 import com.google.cloud.dataflow.sdk.transforms.ParDo;
 import com.google.cloud.dataflow.sdk.values.KV;
 import com.google.cloud.dataflow.sdk.values.PCollection;
 import com.google.cloud.genomics.dataflow.coders.GenericJsonCoder;
+import com.google.common.collect.Lists;
 import htsjdk.samtools.SAMRecord;
 import htsjdk.samtools.SamPairUtil;
 import htsjdk.samtools.metrics.MetricBase;
@@ -23,6 +23,7 @@ import org.broadinstitute.hellbender.engine.dataflow.DataFlowSAMFn;
 import org.broadinstitute.hellbender.engine.dataflow.PTransformSAM;
 import org.broadinstitute.hellbender.engine.dataflow.SAMSerializableFunction;
 import org.broadinstitute.hellbender.engine.filters.ReadFilter;
+import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.metrics.MetricAccumulationLevel;
 import org.broadinstitute.hellbender.tools.picard.analysis.InsertSizeMetrics;
@@ -78,12 +79,13 @@ public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSize
             protected void apply(SAMRecord read) {
                 Integer metric = computeMetric(read);
                 List<AggregationLevel> aggregationLevels = AggregationLevel.getKeysForAllAggregationLevels(read, true, true, true, true);
-                
+
                 aggregationLevels.stream().forEach(k -> output(KV.of(k,metric)));
             }
-        })).setName("Calculate metric and key");
+        })).setName("Calculate metric and key").setCoder(KvCoder.of(AggregationLevel.CombinedKeyCoder, BigEndianIntegerCoder.of()));
 
         Combine.CombineFn<Integer, DataflowHistogram<Integer>, DataflowHistogram<Integer>> combiner = new DataflowHistogrammer<>();
+
 
         PCollection<KV<AggregationLevel,DataflowHistogram<Integer>>> histograms =   kvPairs.apply(Combine.<AggregationLevel, Integer,DataflowHistogram<Integer>>perKey(combiner)).setName("Add reads to histograms");
 
@@ -131,15 +133,15 @@ public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSize
         public void addInput(KV<AggregationLevel, DataflowHistogram<Integer>> input) {
             final DataflowHistogram<Integer> Histogram = input.getValue();
             final AggregationLevel aggregationLevel = input.getKey();
-            final SamPairUtil.PairOrientation pairOrientation = aggregationLevel.getPairOrientation();
+            final SamPairUtil.PairOrientation pairOrientation = aggregationLevel.getOrientation();
             final double total = Histogram.getCount();
 
             // Only include a category if it has a sufficient percentage of the data in it
             if( true /*TODO total > totalInserts * args.MINIMUM_PCT */) {
                 final InsertSizeMetrics metrics = new InsertSizeMetrics();
-                metrics.SAMPLE = null;
-                metrics.LIBRARY = null;
-                metrics.READ_GROUP = null;
+                metrics.SAMPLE =  aggregationLevel.getSample();
+                metrics.LIBRARY = aggregationLevel.getLibrary();
+                metrics.READ_GROUP = aggregationLevel.getReadGroup();
                 metrics.PAIR_ORIENTATION = pairOrientation;
                 metrics.READ_PAIRS = (long) total;
                 metrics.MAX_INSERT_SIZE = (int) Histogram.getMax();
@@ -246,46 +248,10 @@ public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSize
         return Math.abs(read.getInferredInsertSize());
     }
 
-    @DefaultCoder(AvroCoder.class)
-    public final static class InsertSizeGroup {
-        private SamPairUtil.PairOrientation orientation;
-
-        private InsertSizeGroup(){};
-
-        public static InsertSizeGroup of(SAMRecord read){
-            InsertSizeGroup group = new InsertSizeGroup();
-            group.orientation =SamPairUtil.getPairOrientation(read);
-            return group;
-        }
-    }
-
-    @DefaultCoder(AvroCoder.class)
-    public final static class OrientationKey{
-        public SamPairUtil.PairOrientation getPairOrientation() {
-            return pairOrientation;
-        }
-
-        private OrientationKey(){} //for avro
-
-        private SamPairUtil.PairOrientation pairOrientation;
-
-        public static OrientationKey of(SAMRecord read){
-            OrientationKey key = new OrientationKey();
-            key.pairOrientation = SamPairUtil.getPairOrientation(read);
-            return key;
-        }
-
-
-
-    }
-
-    @DefaultCoder(GenericJsonCoder.class)
-    public final static class AggregationLevel extends GenericJson {
-        @com.google.api.client.util.Key
+    public final static class AggregationLevel {
+        private final SamPairUtil.PairOrientation orientation;
         private final String readGroup;
-        @com.google.api.client.util.Key
         private final String library;
-        @com.google.api.client.util.Key
         private final String sample;
 
         public String getReadGroup() {
@@ -301,12 +267,18 @@ public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSize
         }
 
         public AggregationLevel(final SAMRecord read, final boolean includeLibrary, final boolean includeReadGroup, final boolean includeSample){
-            this.readGroup = includeReadGroup ? read.getReadGroup().getId() : null;
+            this.orientation = SamPairUtil.getPairOrientation(read);
             this.library = includeLibrary ? read.getReadGroup().getLibrary() : null;
+            this.readGroup = includeReadGroup ? read.getReadGroup().getId() : null;
             this.sample = includeSample ? read.getReadGroup().getSample(): null;
         }
 
-
+        public AggregationLevel(final SamPairUtil.PairOrientation orientation, final String library, final String readgroup, final String sample) {
+            this.orientation = orientation;
+            this.library = library;
+            this.readGroup = readgroup;
+            this.sample = sample;
+        }
 
         public static  List<AggregationLevel>getKeysForAllAggregationLevels(final SAMRecord read, final boolean includeAll, final boolean includeLibrary, final boolean includeReadGroup, final boolean includeSample){
             final List<AggregationLevel> aggregationLevels = new ArrayList<>();
@@ -326,15 +298,55 @@ public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSize
 
         }
 
+        public SamPairUtil.PairOrientation getOrientation() {
+            return orientation;
+        }
+
         @Override
         public String toString() {
             return "AggregationLevel{" +
+                    "orientation=" + orientation +
                     ", readGroup='" + readGroup + '\'' +
                     ", library='" + library + '\'' +
                     ", sample='" + sample + '\'' +
                     '}';
         }
-    }
 
+        public static final DelegateCoder<AggregationLevel, List<String>> CombinedKeyCoder =
+                DelegateCoder.of(ListCoder.of(StringUtf8Coder.of()), new DelegateCoder.CodingFunction<AggregationLevel, List<String>>() {
+                    @Override
+                    public List<String> apply(AggregationLevel level) throws Exception {
+                        return Lists.newArrayList(toNonNullString(level.getOrientation().toString()),toNonNullString(level.getLibrary()),
+                                toNonNullString(level.getReadGroup()), toNonNullString(level.getSample()));
+                    }
+                }, new DelegateCoder.CodingFunction<List<String>, AggregationLevel>() {
+                    @Override
+                    public AggregationLevel apply(List<String> strings) throws Exception {
+                        return new AggregationLevel(SamPairUtil.PairOrientation.valueOf(fromNonNullString(strings.get(0))),
+                                fromNonNullString(strings.get(1)),
+                                fromNonNullString(strings.get(2)),
+                                fromNonNullString(strings.get(3)));
+                    }
+                });
+
+        private static String toNonNullString(String string){
+            if (string == null){
+                return "0";
+            } else {
+                return "1"+string;
+            }
+        }
+
+        private static String fromNonNullString(String string){
+            if (string.startsWith("0")){
+                return null;
+            } else if (string.startsWith("1")) {
+                return string.substring(1);
+            } else {
+                throw new GATKException("Invalid string, something went wrong in encoding");
+            }
+        }
+
+    }
 
 }

@@ -47,7 +47,32 @@ public final class InsertSizeMetricsTransformUnitTest{
         PCollection<InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer>> presult = preads.apply(transform);
         //presult.apply(ParDo.of(new MetricsFileDataflowBooleanDoFn()));
         DirectPipelineRunner.EvaluationResults result = (DirectPipelineRunner.EvaluationResults)p.run();
-        Assert.assertEquals(result.getPCollection(presult).get(0).toString(), "some string");
+        Assert.assertEquals(result.getPCollection(presult).get(0).toString(), "## htsjdk.samtools.metrics.StringHeader\n" +
+                "# org.broadinstitute.hellbender.tools.picard.analysis.CollectInsertSizeMetrics  --HISTOGRAM_FILE output.pdf --METRIC_ACCUMULATION_LEVEL ALL_READS --METRIC_ACCUMULATION_LEVEL READ_GROUP --METRIC_ACCUMULATION_LEVEL LIBRARY --METRIC_ACCUMULATION_LEVEL SAMPLE --PRODUCE_PLOT true --INPUT src/test/resources/org/broadinstitute/hellbender/tools/picard/analysis/CollectInsertSizeMetrics/insert_size_metrics_test.bam --OUTPUT metrics.out  --DEVIATIONS 10.0 --MINIMUM_PCT 0.05 --ASSUME_SORTED true --STOP_AFTER 0 --VALIDATION_STRINGENCY STRICT --COMPRESSION_LEVEL 5 --MAX_RECORDS_IN_RAM 500000 --CREATE_INDEX false --CREATE_MD5_FILE false --help false --version false --VERBOSITY INFO --QUIET false\n" +
+                "## htsjdk.samtools.metrics.StringHeader\n" +
+                "# Started on: Tue May 19 14:52:18 EDT 2015\n" +
+                "\n" +
+                "## METRICS CLASS\torg.broadinstitute.hellbender.tools.picard.analysis.InsertSizeMetrics\n" +
+                "MEDIAN_INSERT_SIZE\tMEDIAN_ABSOLUTE_DEVIATION\tMIN_INSERT_SIZE\tMAX_INSERT_SIZE\tMEAN_INSERT_SIZE\tSTANDARD_DEVIATION\tREAD_PAIRS\tPAIR_ORIENTATION\tWIDTH_OF_10_PERCENT\tWIDTH_OF_20_PERCENT\tWIDTH_OF_30_PERCENT\tWIDTH_OF_40_PERCENT\tWIDTH_OF_50_PERCENT\tWIDTH_OF_60_PERCENT\tWIDTH_OF_70_PERCENT\tWIDTH_OF_80_PERCENT\tWIDTH_OF_90_PERCENT\tWIDTH_OF_99_PERCENT\tSAMPLE\tLIBRARY\tREAD_GROUP\n" +
+                "41\t3\t36\t45\t40.076923\t3.121472\t13\tFR\t1\t1\t1\t7\t7\t7\t9\t11\t11\t11\n" +
+                "41\t3\t36\t45\t40.076923\t3.121472\t13\tFR\t1\t1\t1\t7\t7\t7\t9\t11\t11\t11\tNA12878\n" +
+                "38.5\t2.5\t36\t41\t38.5\t3.535534\t2\tFR\t5\t5\t5\t5\t5\t0\t0\t0\t0\t0\tNA12878\tSolexa-41734\n" +
+                "40\t2\t36\t45\t39.555556\t2.877113\t9\tFR\t1\t3\t3\t3\t5\t5\t9\t9\t11\t11\tNA12878\tSolexa-41748\n" +
+                "44\t0\t44\t44\t44\t0\t2\tFR\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\tNA12878\tSolexa-41753\n" +
+                "36\t0\t36\t36\t36\t?\t1\tFR\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\tNA12878\tSolexa-41734\t62A79AAXX100907.3\n" +
+                "41\t0\t41\t41\t41\t?\t1\tFR\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\tNA12878\tSolexa-41734\t62A79AAXX100907.5\n" +
+                "41\t1\t38\t45\t41\t2.54951\t5\tFR\t1\t1\t1\t1\t3\t3\t7\t7\t9\t9\tNA12878\tSolexa-41748\t62A79AAXX100907.6\n" +
+                "37\t1\t36\t41\t37.75\t2.362908\t4\tFR\t3\t3\t3\t3\t3\t3\t3\t9\t9\t9\tNA12878\tSolexa-41748\t62A79AAXX100907.7\n" +
+                "44\t0\t44\t44\t44\t0\t2\tFR\t1\t1\t1\t1\t1\t1\t1\t1\t1\t1\tNA12878\tSolexa-41753\t62A79AAXX100907.8\n" +
+                "\n" +
+                "## HISTOGRAM\tjava.lang.Integer\n" +
+                "insert_size\tAll_Reads.fr_count\tNA12878.fr_count\tSolexa-41734.fr_count\tSolexa-41748.fr_count\tSolexa-41753.fr_count\t62A79AAXX100907.3.fr_count\t62A79AAXX100907.5.fr_count\t62A79AAXX100907.6.fr_count\t62A79AAXX100907.7.fr_count\t62A79AAXX100907.8.fr_count\n" +
+                "36\t3\t3\t1\t2\t0\t1\t0\t0\t2\t0\n" +
+                "38\t2\t2\t0\t2\t0\t0\t0\t1\t1\t0\n" +
+                "40\t1\t1\t0\t1\t0\t0\t0\t1\t0\t0\n" +
+                "41\t4\t4\t1\t3\t0\t0\t1\t2\t1\t0\n" +
+                "44\t2\t2\t0\t0\t2\t0\t0\t0\t0\t2\n" +
+                "45\t1\t1\t0\t1\t0\t0\t0\t1\t0\t0");
 
     }
 
@@ -67,7 +92,7 @@ public final class InsertSizeMetricsTransformUnitTest{
     public void testHistogramCombiner(){
         Combine.CombineFn<KV<InsertSizeMetricsDataflowTransform.AggregationLevel, DataflowHistogram<Integer>>,?, InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer>> combiner = new InsertSizeMetricsDataflowTransform.CombineMetricsIntoFile(10.0, null);
         SAMRecord read1 = ArtificialSAMUtils.createPair(ArtificialSAMUtils.createArtificialSamHeader(), "Read1", 100, 4, 200, true, false).get(0);
-        InsertSizeMetricsDataflowTransform.AggregationLevel aggregationLevel = InsertSizeMetricsDataflowTransform.AggregationLevel.of(InsertSizeMetricsDataflowTransform.OrientationKey.of(read1), read1, false, false, false);
+        InsertSizeMetricsDataflowTransform.AggregationLevel aggregationLevel = new InsertSizeMetricsDataflowTransform.AggregationLevel(read1, false, false, false);
 
         DataflowHistogram<Integer> h1= new DataflowHistogram<>();
         h1.addInput(10);
