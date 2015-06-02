@@ -16,7 +16,6 @@ import htsjdk.samtools.SAMRecord;
 import org.broadinstitute.hellbender.engine.dataflow.ReadsSource;
 import org.broadinstitute.hellbender.tools.picard.analysis.InsertSizeMetrics;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
-import org.broadinstitute.hellbender.utils.dataflow.DataflowUtils;
 import org.broadinstitute.hellbender.utils.read.ArtificialSAMUtils;
 import org.broadinstitute.hellbender.utils.test.BaseTest;
 import org.testng.Assert;
@@ -66,9 +65,9 @@ public final class InsertSizeMetricsTransformUnitTest{
 
     @Test(groups = "dataflow")
     public void testHistogramCombiner(){
-        Combine.CombineFn<KV<InsertSizeMetricsDataflowTransform.Key, DataflowHistogram<Integer>>,?, InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer>> combiner = new InsertSizeMetricsDataflowTransform.CombineMetricsIntoFile(10.0, null);
+        Combine.CombineFn<KV<InsertSizeMetricsDataflowTransform.AggregationLevel, DataflowHistogram<Integer>>,?, InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer>> combiner = new InsertSizeMetricsDataflowTransform.CombineMetricsIntoFile(10.0, null);
         SAMRecord read1 = ArtificialSAMUtils.createPair(ArtificialSAMUtils.createArtificialSamHeader(), "Read1", 100, 4, 200, true, false).get(0);
-        InsertSizeMetricsDataflowTransform.Key key = InsertSizeMetricsDataflowTransform.Key.of(read1, false, false, false);
+        InsertSizeMetricsDataflowTransform.AggregationLevel aggregationLevel = InsertSizeMetricsDataflowTransform.AggregationLevel.of(InsertSizeMetricsDataflowTransform.OrientationKey.of(read1), read1, false, false, false);
 
         DataflowHistogram<Integer> h1= new DataflowHistogram<>();
         h1.addInput(10);
@@ -87,7 +86,7 @@ public final class InsertSizeMetricsTransformUnitTest{
 
         List<DataflowHistogram<Integer>> histograms = Lists.newArrayList(h1, h2, h3);
 
-        List<KV<InsertSizeMetricsDataflowTransform.Key,DataflowHistogram<Integer>>> keyedHistograms = histograms.stream().map(h -> KV.of(key, h)).collect(Collectors.toList());
+        List<KV<InsertSizeMetricsDataflowTransform.AggregationLevel,DataflowHistogram<Integer>>> keyedHistograms = histograms.stream().map(h -> KV.of(aggregationLevel, h)).collect(Collectors.toList());
         InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics, Integer> result = combiner.apply(keyedHistograms);
         Assert.assertEquals(result.getAllHistograms().size(), 3);
     }

@@ -1,6 +1,7 @@
 package org.broadinstitute.hellbender.tools.dataflow.transforms;
 
 
+import com.google.api.client.json.GenericJson;
 import com.google.api.services.genomics.model.Read;
 import com.google.cloud.dataflow.sdk.coders.AvroCoder;
 import com.google.cloud.dataflow.sdk.coders.DefaultCoder;
@@ -9,13 +10,13 @@ import com.google.cloud.dataflow.sdk.transforms.Filter;
 import com.google.cloud.dataflow.sdk.transforms.ParDo;
 import com.google.cloud.dataflow.sdk.values.KV;
 import com.google.cloud.dataflow.sdk.values.PCollection;
+import com.google.cloud.genomics.dataflow.coders.GenericJsonCoder;
 import htsjdk.samtools.SAMRecord;
 import htsjdk.samtools.SamPairUtil;
 import htsjdk.samtools.metrics.MetricBase;
 import htsjdk.samtools.metrics.MetricsFile;
 import htsjdk.samtools.util.Histogram;
 import htsjdk.samtools.util.Log;
-import org.apache.avro.reflect.Nullable;
 import org.broadinstitute.hellbender.cmdline.Argument;
 import org.broadinstitute.hellbender.cmdline.ArgumentCollectionDefinition;
 import org.broadinstitute.hellbender.engine.dataflow.DataFlowSAMFn;
@@ -72,18 +73,20 @@ public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSize
 
         PCollection<Read> filtered = input.apply(Filter.by(new SAMSerializableFunction<>(getHeader(), isSecondInMappedPair))).setName("Filter singletons and first of pair");
 
-        PCollection<KV<Key, Integer>> kvPairs = filtered.apply(ParDo.of(new DataFlowSAMFn<KV<Key, Integer>>(getHeader()) {
+        PCollection<KV<AggregationLevel, Integer>> kvPairs = filtered.apply(ParDo.of(new DataFlowSAMFn<KV<AggregationLevel, Integer>>(getHeader()) {
             @Override
             protected void apply(SAMRecord read) {
                 Integer metric = computeMetric(read);
-                List<Key> keys = Key.getKeysForAllAggregationLevels(read, true,true,true,true);
-                keys.stream().forEach(k -> output(KV.of(k,metric)));
+                List<AggregationLevel> aggregationLevels = AggregationLevel.getKeysForAllAggregationLevels(read, true, true, true, true);
+                
+                aggregationLevels.stream().forEach(k -> output(KV.of(k,metric)));
             }
         })).setName("Calculate metric and key");
 
         Combine.CombineFn<Integer, DataflowHistogram<Integer>, DataflowHistogram<Integer>> combiner = new DataflowHistogrammer<>();
 
-        PCollection<KV<Key,DataflowHistogram<Integer>>> histograms =   kvPairs.apply(Combine.<Key, Integer,DataflowHistogram<Integer>>perKey(combiner)).setName("Add reads to histograms");
+        PCollection<KV<AggregationLevel,DataflowHistogram<Integer>>> histograms =   kvPairs.apply(Combine.<AggregationLevel, Integer,DataflowHistogram<Integer>>perKey(combiner)).setName("Add reads to histograms");
+
         PCollection<MetricsFileDataflow<InsertSizeMetrics, Integer>> metricsFile = histograms.apply(Combine.globally(new CombineMetricsIntoFile(args.DEVIATIONS, args.HISTOGRAM_WIDTH)))
                 //.setCoder(SerializableCoder.of((Class<MetricsFileDataflow<InsertSizeMetrics, Integer>>) new MetricsFileDataflow<InsertSizeMetrics, Integer>().getClass()))
                 .setName("Add histograms and metrics to MetricsFile");
@@ -110,8 +113,8 @@ public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSize
     }
 
     public static class CombineMetricsIntoFile
-            extends Combine.AccumulatingCombineFn<KV<Key,DataflowHistogram<Integer>>,CombineMetricsIntoFile,MetricsFileDataflow<InsertSizeMetrics,Integer>>
-            implements Combine.AccumulatingCombineFn.Accumulator<KV<Key,DataflowHistogram<Integer>>,CombineMetricsIntoFile,MetricsFileDataflow<InsertSizeMetrics,Integer>> {
+            extends Combine.AccumulatingCombineFn<KV<AggregationLevel,DataflowHistogram<Integer>>,CombineMetricsIntoFile,MetricsFileDataflow<InsertSizeMetrics,Integer>>
+            implements Combine.AccumulatingCombineFn.Accumulator<KV<AggregationLevel,DataflowHistogram<Integer>>,CombineMetricsIntoFile,MetricsFileDataflow<InsertSizeMetrics,Integer>> {
 
         private final MetricsFileDataflow<InsertSizeMetrics,Integer> metricsFile;
         private final double DEVIATIONS;
@@ -125,10 +128,10 @@ public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSize
 
 
         @Override
-        public void addInput(KV<Key, DataflowHistogram<Integer>> input) {
+        public void addInput(KV<AggregationLevel, DataflowHistogram<Integer>> input) {
             final DataflowHistogram<Integer> Histogram = input.getValue();
-            final Key key = input.getKey();
-            final SamPairUtil.PairOrientation pairOrientation = key.orientation;
+            final AggregationLevel aggregationLevel = input.getKey();
+            final SamPairUtil.PairOrientation pairOrientation = aggregationLevel.getPairOrientation();
             final double total = Histogram.getCount();
 
             // Only include a category if it has a sufficient percentage of the data in it
@@ -256,43 +259,81 @@ public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSize
         }
     }
 
-
     @DefaultCoder(AvroCoder.class)
-    public final static class Key {
-        private SamPairUtil.PairOrientation orientation;
-        private @Nullable String readGroup;
-        private @Nullable String library;
-        private @Nullable String sample;
+    public final static class OrientationKey{
+        public SamPairUtil.PairOrientation getPairOrientation() {
+            return pairOrientation;
+        }
 
-        public Key(){};
+        private OrientationKey(){} //for avro
 
-        public static Key of(final SAMRecord read,final boolean includeLibrary, final boolean includeReadGroup, final boolean includeSample){
-            Key key = new Key();
-            key.orientation = SamPairUtil.getPairOrientation(read);
-            key.readGroup = includeReadGroup ? read.getReadGroup().getId() : null;
-            key.library = includeLibrary ? read.getReadGroup().getLibrary() : null;
-            key.sample = includeSample ? read.getReadGroup().getSample(): null;
+        private SamPairUtil.PairOrientation pairOrientation;
+
+        public static OrientationKey of(SAMRecord read){
+            OrientationKey key = new OrientationKey();
+            key.pairOrientation = SamPairUtil.getPairOrientation(read);
             return key;
         }
 
-        public static List<Key> getKeysForAllAggregationLevels(final SAMRecord read,final boolean includeAll, final boolean includeLibrary, final boolean includeReadGroup, final boolean includeSample){
-            final List<Key> keys = new ArrayList<>();
+
+
+    }
+
+    @DefaultCoder(GenericJsonCoder.class)
+    public final static class AggregationLevel extends GenericJson {
+        @com.google.api.client.util.Key
+        private final String readGroup;
+        @com.google.api.client.util.Key
+        private final String library;
+        @com.google.api.client.util.Key
+        private final String sample;
+
+        public String getReadGroup() {
+            return readGroup;
+        }
+
+        public String getLibrary() {
+            return library;
+        }
+
+        public String getSample() {
+            return sample;
+        }
+
+        public AggregationLevel(final SAMRecord read, final boolean includeLibrary, final boolean includeReadGroup, final boolean includeSample){
+            this.readGroup = includeReadGroup ? read.getReadGroup().getId() : null;
+            this.library = includeLibrary ? read.getReadGroup().getLibrary() : null;
+            this.sample = includeSample ? read.getReadGroup().getSample(): null;
+        }
+
+
+
+        public static  List<AggregationLevel>getKeysForAllAggregationLevels(final SAMRecord read, final boolean includeAll, final boolean includeLibrary, final boolean includeReadGroup, final boolean includeSample){
+            final List<AggregationLevel> aggregationLevels = new ArrayList<>();
             if(includeAll) {
-                keys.add(Key.of(read, false, false, false));
+                aggregationLevels.add(new AggregationLevel(read, false, false, false));
             }
             if(includeLibrary){
-                keys.add(Key.of(read,true, false, false));
+                aggregationLevels.add(new AggregationLevel(read,true, false, false));
             }
             if(includeReadGroup){
-                keys.add(Key.of(read, true, true, false));
+                aggregationLevels.add(new AggregationLevel(read, true, true, false));
             }
             if(includeSample){
-                keys.add(Key.of(read,true,true,true));
+                aggregationLevels.add(new AggregationLevel(read, true, true, true));
             }
-            return keys;
+            return aggregationLevels;
 
         }
 
+        @Override
+        public String toString() {
+            return "AggregationLevel{" +
+                    ", readGroup='" + readGroup + '\'' +
+                    ", library='" + library + '\'' +
+                    ", sample='" + sample + '\'' +
+                    '}';
+        }
     }
 
 
