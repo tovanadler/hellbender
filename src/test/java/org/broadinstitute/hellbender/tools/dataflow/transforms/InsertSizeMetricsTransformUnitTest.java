@@ -13,6 +13,8 @@ import com.google.cloud.dataflow.sdk.values.PCollection;
 import com.google.cloud.genomics.dataflow.utils.DataflowWorkarounds;
 import com.google.common.collect.Lists;
 import htsjdk.samtools.SAMRecord;
+import htsjdk.samtools.metrics.Header;
+import htsjdk.samtools.metrics.StringHeader;
 import org.broadinstitute.hellbender.engine.dataflow.ReadsSource;
 import org.broadinstitute.hellbender.tools.picard.analysis.InsertSizeMetrics;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
@@ -25,6 +27,8 @@ import java.io.*;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+
 
 public final class InsertSizeMetricsTransformUnitTest{
 
@@ -90,7 +94,7 @@ public final class InsertSizeMetricsTransformUnitTest{
 
     @Test(groups = "dataflow")
     public void testHistogramCombiner(){
-        Combine.CombineFn<KV<InsertSizeMetricsDataflowTransform.AggregationLevel, DataflowHistogram<Integer>>,?, InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer>> combiner = new InsertSizeMetricsDataflowTransform.CombineMetricsIntoFile(10.0, null);
+        Combine.CombineFn<KV<InsertSizeMetricsDataflowTransform.AggregationLevel, DataflowHistogram<Integer>>,?, InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer>> combiner = new InsertSizeMetricsDataflowTransform.CombineHistogramsIntoMetricsFile(10.0, null, 0.05f);
         SAMRecord read1 = ArtificialSAMUtils.createPair(ArtificialSAMUtils.createArtificialSamHeader(), "Read1", 100, 4, 200, true, false).get(0);
         InsertSizeMetricsDataflowTransform.AggregationLevel aggregationLevel = new InsertSizeMetricsDataflowTransform.AggregationLevel(read1, false, false, false);
 
@@ -114,6 +118,33 @@ public final class InsertSizeMetricsTransformUnitTest{
         List<KV<InsertSizeMetricsDataflowTransform.AggregationLevel,DataflowHistogram<Integer>>> keyedHistograms = histograms.stream().map(h -> KV.of(aggregationLevel, h)).collect(Collectors.toList());
         InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics, Integer> result = combiner.apply(keyedHistograms);
         Assert.assertEquals(result.getAllHistograms().size(), 3);
+    }
+
+    @Test
+    public void testCombineMetricsFiles(){
+        Combine.CombineFn<InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer>,
+                InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer>,
+                InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer>> combiner =
+                new InsertSizeMetricsDataflowTransform.CombineMetricsFiles<>();
+
+        InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer> mf1 = new InsertSizeMetricsDataflowTransform.MetricsFileDataflow<>();
+        mf1.addMetric(new InsertSizeMetrics());
+        mf1.addHeader(new StringHeader("header1"));
+
+        InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer> mf2 = new InsertSizeMetricsDataflowTransform.MetricsFileDataflow<>();
+        mf2.addMetric(new InsertSizeMetrics());
+        mf2.addHeader(new StringHeader("header2"));
+
+        InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer> mf3 = new InsertSizeMetricsDataflowTransform.MetricsFileDataflow<>();
+        mf3.addMetric(new InsertSizeMetrics());
+        mf3.addHeader(new StringHeader("header3"));
+
+        InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics, Integer> combined = combiner.apply(Lists.newArrayList(mf1, mf2, mf3));
+
+        Assert.assertEquals(combined.getMetrics().size(), 3);
+        Assert.assertEquals(combined.getAllHistograms().size(), 0);
+        Assert.assertEquals(combined.getHeaders().size(), 3);
+
     }
 
     private static class MetricsFileDataflowBooleanDoFn extends DoFn<InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics, Integer>, Boolean> {

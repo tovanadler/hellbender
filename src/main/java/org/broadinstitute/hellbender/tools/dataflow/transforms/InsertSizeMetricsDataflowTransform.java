@@ -1,18 +1,21 @@
 package org.broadinstitute.hellbender.tools.dataflow.transforms;
 
-
 import com.google.api.client.json.GenericJson;
+import com.google.api.client.util.Key;
 import com.google.api.services.genomics.model.Read;
-import com.google.cloud.dataflow.sdk.coders.*;
+import com.google.cloud.dataflow.sdk.coders.BigEndianIntegerCoder;
+import com.google.cloud.dataflow.sdk.coders.KvCoder;
 import com.google.cloud.dataflow.sdk.transforms.Combine;
+import com.google.cloud.dataflow.sdk.transforms.DoFn;
 import com.google.cloud.dataflow.sdk.transforms.Filter;
 import com.google.cloud.dataflow.sdk.transforms.ParDo;
 import com.google.cloud.dataflow.sdk.values.KV;
 import com.google.cloud.dataflow.sdk.values.PCollection;
 import com.google.cloud.genomics.dataflow.coders.GenericJsonCoder;
-import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
 import htsjdk.samtools.SAMRecord;
 import htsjdk.samtools.SamPairUtil;
+import htsjdk.samtools.metrics.Header;
 import htsjdk.samtools.metrics.MetricBase;
 import htsjdk.samtools.metrics.MetricsFile;
 import htsjdk.samtools.util.Histogram;
@@ -23,17 +26,15 @@ import org.broadinstitute.hellbender.engine.dataflow.DataFlowSAMFn;
 import org.broadinstitute.hellbender.engine.dataflow.PTransformSAM;
 import org.broadinstitute.hellbender.engine.dataflow.SAMSerializableFunction;
 import org.broadinstitute.hellbender.engine.filters.ReadFilter;
-import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.metrics.MetricAccumulationLevel;
 import org.broadinstitute.hellbender.tools.picard.analysis.InsertSizeMetrics;
 
 import java.io.Serializable;
 import java.io.StringWriter;
-import java.util.ArrayList;
-import java.util.EnumSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer>> {
     private final Arguments args;
@@ -72,6 +73,8 @@ public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSize
     @Override
     public PCollection<MetricsFileDataflow<InsertSizeMetrics, Integer>> apply(PCollection<Read> input) {
 
+        //input.getPipeline().getCoderRegistry().registerCoder(MetricsFileDataflow.class, SerializableCoder.of(MetricsFileDataflow.class));
+
         PCollection<Read> filtered = input.apply(Filter.by(new SAMSerializableFunction<>(getHeader(), isSecondInMappedPair))).setName("Filter singletons and first of pair");
 
         PCollection<KV<AggregationLevel, Integer>> kvPairs = filtered.apply(ParDo.of(new DataFlowSAMFn<KV<AggregationLevel, Integer>>(getHeader()) {
@@ -82,18 +85,38 @@ public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSize
 
                 aggregationLevels.stream().forEach(k -> output(KV.of(k,metric)));
             }
-        })).setName("Calculate metric and key").setCoder(KvCoder.of(AggregationLevel.CombinedKeyCoder, BigEndianIntegerCoder.of()));
+        })).setName("Calculate metric and key")
+                .setCoder(KvCoder.of(GenericJsonCoder.of(AggregationLevel.class),BigEndianIntegerCoder.of()));
 
         Combine.CombineFn<Integer, DataflowHistogram<Integer>, DataflowHistogram<Integer>> combiner = new DataflowHistogrammer<>();
 
 
-        PCollection<KV<AggregationLevel,DataflowHistogram<Integer>>> histograms =   kvPairs.apply(Combine.<AggregationLevel, Integer,DataflowHistogram<Integer>>perKey(combiner)).setName("Add reads to histograms");
+        PCollection<KV<AggregationLevel,DataflowHistogram<Integer>>> histograms = kvPairs.apply(Combine.<AggregationLevel, Integer,DataflowHistogram<Integer>>perKey(combiner)).setName("Add reads to histograms");
+        PCollection<KV<AggregationLevel, KV<AggregationLevel,DataflowHistogram<Integer>>>> reKeyedHistograms = histograms.apply(ParDo.of(new DoFn<KV<AggregationLevel,DataflowHistogram<Integer>>,KV<AggregationLevel,KV<AggregationLevel,DataflowHistogram<Integer>>>>() {
 
-        PCollection<MetricsFileDataflow<InsertSizeMetrics, Integer>> metricsFile = histograms.apply(Combine.globally(new CombineMetricsIntoFile(args.DEVIATIONS, args.HISTOGRAM_WIDTH)))
+            @Override
+            public void processElement(ProcessContext c) throws Exception {
+                KV<AggregationLevel, DataflowHistogram<Integer>> histo = c.element();
+                AggregationLevel oldKey = histo.getKey();
+                AggregationLevel newKey = new AggregationLevel(null, oldKey.getLibrary(), oldKey.getReadGroup(), oldKey.getSample());
+                c.output(KV.of(newKey, histo));
+            }
+        })).setName("Re-key histograms");
+
+        PCollection <KV<AggregationLevel,MetricsFileDataflow < InsertSizeMetrics, Integer >>> metricsFiles = reKeyedHistograms.apply(Combine.perKey(new CombineHistogramsIntoMetricsFile(args.DEVIATIONS, args.HISTOGRAM_WIDTH, args.MINIMUM_PCT)))
                 //.setCoder(SerializableCoder.of((Class<MetricsFileDataflow<InsertSizeMetrics, Integer>>) new MetricsFileDataflow<InsertSizeMetrics, Integer>().getClass()))
                 .setName("Add histograms and metrics to MetricsFile");
 
-        return metricsFile;
+        PCollection<MetricsFileDataflow < InsertSizeMetrics, Integer >> metricsFilesNoKeys = metricsFiles.apply(ParDo.of( new DoFn<KV<?,MetricsFileDataflow<InsertSizeMetrics,Integer>>,MetricsFileDataflow<InsertSizeMetrics,Integer>>(){
+
+            @Override
+            public void processElement(ProcessContext c) throws Exception {
+                c.output(c.element().getValue());
+            }
+        })).setName("Drop keys");
+
+        PCollection<MetricsFileDataflow<InsertSizeMetrics,Integer>> singleMetricsFile = metricsFilesNoKeys.<PCollection<MetricsFileDataflow<InsertSizeMetrics, Integer>>>apply(Combine.<MetricsFileDataflow<InsertSizeMetrics, Integer>,MetricsFileDataflow <InsertSizeMetrics, Integer>>globally(new CombineMetricsFiles<>()));
+        return singleMetricsFile;
     }
 
 
@@ -105,6 +128,8 @@ public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSize
     }
 
 
+
+
     public static class MetricsFileDataflow<BEAN extends MetricBase & Serializable , HKEY extends Comparable> extends MetricsFile<BEAN, HKEY> implements Serializable {
         @Override
         public String toString(){
@@ -114,52 +139,50 @@ public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSize
         }
     }
 
-    public static class CombineMetricsIntoFile
-            extends Combine.AccumulatingCombineFn<KV<AggregationLevel,DataflowHistogram<Integer>>,CombineMetricsIntoFile,MetricsFileDataflow<InsertSizeMetrics,Integer>>
-            implements Combine.AccumulatingCombineFn.Accumulator<KV<AggregationLevel,DataflowHistogram<Integer>>,CombineMetricsIntoFile,MetricsFileDataflow<InsertSizeMetrics,Integer>> {
+    public static class CombineHistogramsIntoMetricsFile
+            extends Combine.CombineFn<KV<AggregationLevel,DataflowHistogram<Integer>>,CombineHistogramsIntoMetricsFile,MetricsFileDataflow<InsertSizeMetrics,Integer>> {
 
-        private final MetricsFileDataflow<InsertSizeMetrics,Integer> metricsFile;
+
         private final double DEVIATIONS;
-        private final Integer HISTOGRAM_WIDTH;  
+        private final Integer HISTOGRAM_WIDTH;
+        private final float MINIMUM_PERCENT;
 
-        public CombineMetricsIntoFile(double deviations, Integer histogramWidth) {
-            metricsFile = new MetricsFileDataflow<>();
+        private final Map<AggregationLevel, DataflowHistogram<Integer>> histograms = new HashMap<>();
+
+        public CombineHistogramsIntoMetricsFile(double deviations, Integer histogramWidth, float minimumPercent) {
             this.DEVIATIONS = deviations;
             this.HISTOGRAM_WIDTH = histogramWidth;
+            this.MINIMUM_PERCENT = minimumPercent;
         }
 
-
-        @Override
-        public void addInput(KV<AggregationLevel, DataflowHistogram<Integer>> input) {
-            final DataflowHistogram<Integer> Histogram = input.getValue();
-            final AggregationLevel aggregationLevel = input.getKey();
+        public void  addHistogramToMetricsFile(AggregationLevel aggregationLevel, DataflowHistogram<Integer> histogram, MetricsFileDataflow<InsertSizeMetrics,Integer> metricsFile, double totalInserts) {
             final SamPairUtil.PairOrientation pairOrientation = aggregationLevel.getOrientation();
-            final double total = Histogram.getCount();
+            final double total = histogram.getCount();
 
             // Only include a category if it has a sufficient percentage of the data in it
-            if( true /*TODO total > totalInserts * args.MINIMUM_PCT */) {
+            if( (total > totalInserts * MINIMUM_PERCENT)) {
                 final InsertSizeMetrics metrics = new InsertSizeMetrics();
                 metrics.SAMPLE =  aggregationLevel.getSample();
                 metrics.LIBRARY = aggregationLevel.getLibrary();
                 metrics.READ_GROUP = aggregationLevel.getReadGroup();
                 metrics.PAIR_ORIENTATION = pairOrientation;
                 metrics.READ_PAIRS = (long) total;
-                metrics.MAX_INSERT_SIZE = (int) Histogram.getMax();
-                metrics.MIN_INSERT_SIZE = (int) Histogram.getMin();
-                metrics.MEDIAN_INSERT_SIZE = Histogram.getMedian();
-                metrics.MEDIAN_ABSOLUTE_DEVIATION = Histogram.getMedianAbsoluteDeviation();
+                metrics.MAX_INSERT_SIZE = (int) histogram.getMax();
+                metrics.MIN_INSERT_SIZE = (int) histogram.getMin();
+                metrics.MEDIAN_INSERT_SIZE = histogram.getMedian();
+                metrics.MEDIAN_ABSOLUTE_DEVIATION = histogram.getMedianAbsoluteDeviation();
 
-                final double median = Histogram.getMedian();
+                final double median = histogram.getMedian();
                 double covered = 0;
                 double low = median;
                 double high = median;
 
-                while (low >= Histogram.getMin() || high <= Histogram.getMax()) {
-                    final htsjdk.samtools.util.Histogram<Integer>.Bin lowBin = Histogram.get((int) low);
+                while (low >= histogram.getMin() || high <= histogram.getMax()) {
+                    final htsjdk.samtools.util.Histogram<Integer>.Bin lowBin = histogram.get((int) low);
                     if (lowBin != null) covered += lowBin.getValue();
 
                     if (low != high) {
-                        final htsjdk.samtools.util.Histogram<Integer>.Bin highBin = Histogram.get((int) high);
+                        final htsjdk.samtools.util.Histogram<Integer>.Bin highBin = histogram.get((int) high);
                         if (highBin != null) covered += highBin.getValue();
                     }
 
@@ -191,7 +214,7 @@ public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSize
                 }
 
                 // Trim the Histogram down to get rid of outliers that would make the chart useless.
-                final htsjdk.samtools.util.Histogram<Integer> trimmedHisto = Histogram; //alias it
+                final htsjdk.samtools.util.Histogram<Integer> trimmedHisto = histogram; //alias it
                 int actualWidth = inferHistogramWidth(HISTOGRAM_WIDTH, metrics, DEVIATIONS);
 
                 trimmedHisto.trimByWidth(actualWidth);
@@ -216,22 +239,45 @@ public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSize
         }
 
         @Override
-        public void mergeAccumulator(CombineMetricsIntoFile other) {
-            metricsFile.addAllMetrics(other.metricsFile.getMetrics());
-            List<Histogram<Integer>> histograms = other.metricsFile.getAllHistograms();
-            histograms.forEach(metricsFile::addHistogram);
+        public CombineHistogramsIntoMetricsFile createAccumulator() {
+            return new CombineHistogramsIntoMetricsFile(this.DEVIATIONS, this.HISTOGRAM_WIDTH, this.MINIMUM_PERCENT);
         }
 
+        @Override
+        public CombineHistogramsIntoMetricsFile addInput(CombineHistogramsIntoMetricsFile accumulator, KV<AggregationLevel, DataflowHistogram<Integer>> input) {
+            accumulator.histograms.put(input.getKey(), input.getValue());
+            return accumulator;
+        }
 
         @Override
-        public MetricsFileDataflow<InsertSizeMetrics, Integer> extractOutput() {
+        public CombineHistogramsIntoMetricsFile mergeAccumulators(Iterable<CombineHistogramsIntoMetricsFile> accumulators) {
+            Map<AggregationLevel, DataflowHistogram<Integer>> histograms = StreamSupport.stream(accumulators.spliterator(), false)
+                    .flatMap(a -> a.histograms.entrySet().stream())
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+            CombineHistogramsIntoMetricsFile accum = createAccumulator();
+            accum.histograms.putAll(histograms);
+            return accum;
+        }
+
+        @Override
+        public MetricsFileDataflow<InsertSizeMetrics, Integer> extractOutput(CombineHistogramsIntoMetricsFile accumulator) {
+            final MetricsFileDataflow<InsertSizeMetrics,Integer> metricsFile = new MetricsFileDataflow<>();
+
+
+            double totalInserts = accumulator.histograms.values()
+                    .stream()
+                    .mapToDouble(Histogram::getCount)
+                    .sum();
+
+            Map<AggregationLevel, DataflowHistogram<Integer>> sortedHistograms = new TreeMap<>(Comparator.comparing((AggregationLevel a) -> a.getSample() != null ? a.getSample(): "")
+                .thenComparing(a -> a.getLibrary() != null ? a.getLibrary() : "")
+                .thenComparing(a -> a.getReadGroup() != null ? a.getReadGroup() : ""));
+            sortedHistograms.putAll(accumulator.histograms);
+            sortedHistograms.entrySet().forEach(kv -> addHistogramToMetricsFile(kv.getKey(), kv.getValue(), metricsFile, totalInserts));
             return metricsFile;
         }
 
-        @Override
-        public CombineMetricsIntoFile createAccumulator() {
-            return new CombineMetricsIntoFile(this.DEVIATIONS, this.HISTOGRAM_WIDTH);
-        }
     }
 
 
@@ -248,10 +294,14 @@ public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSize
         return Math.abs(read.getInferredInsertSize());
     }
 
-    public final static class AggregationLevel {
-        private final SamPairUtil.PairOrientation orientation;
+    public final static class AggregationLevel extends GenericJson {
+        @Key
+        private final String orientation;
+        @Key
         private final String readGroup;
+        @Key
         private final String library;
+        @Key
         private final String sample;
 
         public String getReadGroup() {
@@ -266,14 +316,15 @@ public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSize
             return sample;
         }
 
+
         public AggregationLevel(final SAMRecord read, final boolean includeLibrary, final boolean includeReadGroup, final boolean includeSample){
-            this.orientation = SamPairUtil.getPairOrientation(read);
+            this.orientation = SamPairUtil.getPairOrientation(read).toString();
             this.library = includeLibrary ? read.getReadGroup().getLibrary() : null;
             this.readGroup = includeReadGroup ? read.getReadGroup().getId() : null;
             this.sample = includeSample ? read.getReadGroup().getSample(): null;
         }
 
-        public AggregationLevel(final SamPairUtil.PairOrientation orientation, final String library, final String readgroup, final String sample) {
+        public AggregationLevel(final String orientation, final String library, final String readgroup, final String sample) {
             this.orientation = orientation;
             this.library = library;
             this.readGroup = readgroup;
@@ -286,20 +337,20 @@ public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSize
                 aggregationLevels.add(new AggregationLevel(read, false, false, false));
             }
             if(includeLibrary){
-                aggregationLevels.add(new AggregationLevel(read,true, false, false));
+                aggregationLevels.add(new AggregationLevel(read,true, true, true));
             }
             if(includeReadGroup){
-                aggregationLevels.add(new AggregationLevel(read, true, true, false));
+                aggregationLevels.add(new AggregationLevel(read, false, true, true));
             }
             if(includeSample){
-                aggregationLevels.add(new AggregationLevel(read, true, true, true));
+                aggregationLevels.add(new AggregationLevel(read, false, false, true));
             }
             return aggregationLevels;
 
         }
 
         public SamPairUtil.PairOrientation getOrientation() {
-            return orientation;
+            return SamPairUtil.PairOrientation.valueOf(orientation);
         }
 
         @Override
@@ -312,41 +363,46 @@ public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSize
                     '}';
         }
 
-        public static final DelegateCoder<AggregationLevel, List<String>> CombinedKeyCoder =
-                DelegateCoder.of(ListCoder.of(StringUtf8Coder.of()), new DelegateCoder.CodingFunction<AggregationLevel, List<String>>() {
-                    @Override
-                    public List<String> apply(AggregationLevel level) throws Exception {
-                        return Lists.newArrayList(toNonNullString(level.getOrientation().toString()),toNonNullString(level.getLibrary()),
-                                toNonNullString(level.getReadGroup()), toNonNullString(level.getSample()));
-                    }
-                }, new DelegateCoder.CodingFunction<List<String>, AggregationLevel>() {
-                    @Override
-                    public AggregationLevel apply(List<String> strings) throws Exception {
-                        return new AggregationLevel(SamPairUtil.PairOrientation.valueOf(fromNonNullString(strings.get(0))),
-                                fromNonNullString(strings.get(1)),
-                                fromNonNullString(strings.get(2)),
-                                fromNonNullString(strings.get(3)));
-                    }
-                });
 
-        private static String toNonNullString(String string){
-            if (string == null){
-                return "0";
-            } else {
-                return "1"+string;
-            }
+    }
+
+    public static class  CombineMetricsFiles<VI extends MetricsFileDataflow<BEAN,HKEY>, BEAN extends MetricBase & Serializable, HKEY extends Comparable<HKEY>>
+    extends Combine.CombineFn<VI, MetricsFileDataflow<BEAN,HKEY>, MetricsFileDataflow<BEAN,HKEY>>{
+
+        @Override
+        public MetricsFileDataflow<BEAN,HKEY> createAccumulator() {
+            return new MetricsFileDataflow<>();
         }
 
-        private static String fromNonNullString(String string){
-            if (string.startsWith("0")){
-                return null;
-            } else if (string.startsWith("1")) {
-                return string.substring(1);
-            } else {
-                throw new GATKException("Invalid string, something went wrong in encoding");
-            }
+        @Override
+        public MetricsFileDataflow<BEAN, HKEY> addInput(MetricsFileDataflow<BEAN, HKEY> accumulator, VI input) {
+            return combineMetricsFiles(accumulator, input);
+        }
+
+        private MetricsFileDataflow<BEAN, HKEY> combineMetricsFiles(MetricsFileDataflow<BEAN, HKEY> accumulator, MetricsFileDataflow<BEAN,HKEY> input) {
+            Set<Header> headers = Sets.newLinkedHashSet(accumulator.getHeaders());
+            Set<Header> inputHeaders = Sets.newLinkedHashSet(input.getHeaders());
+            inputHeaders.removeAll(headers);
+            inputHeaders.stream().forEach(accumulator::addHeader);
+
+            accumulator.addAllMetrics(input.getMetrics());
+            input.getAllHistograms().stream().forEach(accumulator::addHistogram);
+            return accumulator;
+        }
+
+        @Override
+        public MetricsFileDataflow<BEAN, HKEY> mergeAccumulators(Iterable<MetricsFileDataflow<BEAN, HKEY>> accumulators) {
+            MetricsFileDataflow<BEAN, HKEY> base = createAccumulator();
+            accumulators.forEach(accum -> combineMetricsFiles(base,  accum));
+            return base;
+        }
+
+        @Override
+        public MetricsFileDataflow<BEAN, HKEY> extractOutput(MetricsFileDataflow<BEAN, HKEY> accumulator) {
+            return accumulator;
         }
 
     }
+
 
 }
