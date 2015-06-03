@@ -6,10 +6,12 @@ import com.google.cloud.dataflow.sdk.coders.SerializableCoder;
 import com.google.cloud.dataflow.sdk.runners.DirectPipelineRunner;
 import com.google.cloud.dataflow.sdk.testing.TestPipeline;
 import com.google.cloud.dataflow.sdk.transforms.Combine;
+import com.google.cloud.dataflow.sdk.transforms.Create;
 import com.google.cloud.dataflow.sdk.transforms.DoFn;
 import com.google.cloud.dataflow.sdk.util.SerializableUtils;
 import com.google.cloud.dataflow.sdk.values.KV;
 import com.google.cloud.dataflow.sdk.values.PCollection;
+import com.google.cloud.dataflow.sdk.values.POutput;
 import com.google.cloud.genomics.dataflow.utils.DataflowWorkarounds;
 import com.google.common.collect.Lists;
 import htsjdk.samtools.SAMRecord;
@@ -121,11 +123,37 @@ public final class InsertSizeMetricsTransformUnitTest{
     }
 
     @Test
+    public void testCombineMetricsFilePTransform(){
+        Pipeline p = TestPipeline.create();
+
+        InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer> mf1 = new InsertSizeMetricsDataflowTransform.MetricsFileDataflow<>();
+        mf1.addMetric(new InsertSizeMetrics());
+        mf1.addHeader(new StringHeader("header1"));
+
+        InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer> mf2 = new InsertSizeMetricsDataflowTransform.MetricsFileDataflow<>();
+        mf2.addMetric(new InsertSizeMetrics());
+        mf2.addHeader(new StringHeader("header2"));
+
+        InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer> mf3 = new InsertSizeMetricsDataflowTransform.MetricsFileDataflow<>();
+        mf3.addMetric(new InsertSizeMetrics());
+        mf3.addHeader(new StringHeader("header3"));
+
+
+        PCollection<InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics, Integer>> files = p.apply(Create.of(Lists.newArrayList(mf1, mf2, mf3)));
+        PCollection<InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics, Integer>> combined = files.apply(Combine.globally(new InsertSizeMetricsDataflowTransform.CombineMetricsFiles()));
+
+
+    }
+
+
+
+
+    @Test
     public void testCombineMetricsFiles(){
         Combine.CombineFn<InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer>,
                 InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer>,
                 InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer>> combiner =
-                new InsertSizeMetricsDataflowTransform.CombineMetricsFiles<>();
+                new InsertSizeMetricsDataflowTransform.CombineMetricsFiles();
 
         InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer> mf1 = new InsertSizeMetricsDataflowTransform.MetricsFileDataflow<>();
         mf1.addMetric(new InsertSizeMetrics());

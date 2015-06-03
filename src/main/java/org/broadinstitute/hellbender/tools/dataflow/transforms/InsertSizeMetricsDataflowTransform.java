@@ -4,8 +4,11 @@ import com.google.api.client.json.GenericJson;
 import com.google.api.client.util.Key;
 import com.google.api.services.genomics.model.Read;
 import com.google.cloud.dataflow.sdk.coders.BigEndianIntegerCoder;
+import com.google.cloud.dataflow.sdk.coders.DefaultCoder;
 import com.google.cloud.dataflow.sdk.coders.KvCoder;
+import com.google.cloud.dataflow.sdk.coders.SerializableCoder;
 import com.google.cloud.dataflow.sdk.transforms.Combine;
+import com.google.cloud.dataflow.sdk.transforms.Combine.CombineFn;
 import com.google.cloud.dataflow.sdk.transforms.DoFn;
 import com.google.cloud.dataflow.sdk.transforms.Filter;
 import com.google.cloud.dataflow.sdk.transforms.ParDo;
@@ -73,7 +76,7 @@ public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSize
     @Override
     public PCollection<MetricsFileDataflow<InsertSizeMetrics, Integer>> apply(PCollection<Read> input) {
 
-        //input.getPipeline().getCoderRegistry().registerCoder(MetricsFileDataflow.class, SerializableCoder.of(MetricsFileDataflow.class));
+        input.getPipeline().getCoderRegistry().registerCoder(InsertSizeMetrics.class, SerializableCoder.of(InsertSizeMetrics.class));
 
         PCollection<Read> filtered = input.apply(Filter.by(new SAMSerializableFunction<>(getHeader(), isSecondInMappedPair))).setName("Filter singletons and first of pair");
 
@@ -88,7 +91,7 @@ public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSize
         })).setName("Calculate metric and key")
                 .setCoder(KvCoder.of(GenericJsonCoder.of(AggregationLevel.class),BigEndianIntegerCoder.of()));
 
-        Combine.CombineFn<Integer, DataflowHistogram<Integer>, DataflowHistogram<Integer>> combiner = new DataflowHistogrammer<>();
+        CombineFn<Integer, DataflowHistogram<Integer>, DataflowHistogram<Integer>> combiner = new DataflowHistogrammer<>();
 
 
         PCollection<KV<AggregationLevel,DataflowHistogram<Integer>>> histograms = kvPairs.apply(Combine.<AggregationLevel, Integer,DataflowHistogram<Integer>>perKey(combiner)).setName("Add reads to histograms");
@@ -115,7 +118,7 @@ public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSize
             }
         })).setName("Drop keys");
 
-        PCollection<MetricsFileDataflow<InsertSizeMetrics,Integer>> singleMetricsFile = metricsFilesNoKeys.<PCollection<MetricsFileDataflow<InsertSizeMetrics, Integer>>>apply(Combine.<MetricsFileDataflow<InsertSizeMetrics, Integer>,MetricsFileDataflow <InsertSizeMetrics, Integer>>globally(new CombineMetricsFiles<>()));
+        PCollection<MetricsFileDataflow<InsertSizeMetrics,Integer>> singleMetricsFile = metricsFilesNoKeys.<PCollection<MetricsFileDataflow<InsertSizeMetrics, Integer>>>apply(Combine.<MetricsFileDataflow<InsertSizeMetrics, Integer>,MetricsFileDataflow <InsertSizeMetrics, Integer>>globally(new CombineMetricsFiles()));
         return singleMetricsFile;
     }
 
@@ -294,15 +297,16 @@ public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSize
         return Math.abs(read.getInferredInsertSize());
     }
 
+    @DefaultCoder(GenericJsonCoder.class)
     public final static class AggregationLevel extends GenericJson {
         @Key
-        private final String orientation;
+        private String orientation;
         @Key
-        private final String readGroup;
+        private String readGroup;
         @Key
-        private final String library;
+        private String library;
         @Key
-        private final String sample;
+        private String sample;
 
         public String getReadGroup() {
             return readGroup;
@@ -323,6 +327,8 @@ public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSize
             this.readGroup = includeReadGroup ? read.getReadGroup().getId() : null;
             this.sample = includeSample ? read.getReadGroup().getSample(): null;
         }
+
+        public AggregationLevel(){};
 
         public AggregationLevel(final String orientation, final String library, final String readgroup, final String sample) {
             this.orientation = orientation;
@@ -366,20 +372,20 @@ public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSize
 
     }
 
-    public static class  CombineMetricsFiles<VI extends MetricsFileDataflow<BEAN,HKEY>, BEAN extends MetricBase & Serializable, HKEY extends Comparable<HKEY>>
-    extends Combine.CombineFn<VI, MetricsFileDataflow<BEAN,HKEY>, MetricsFileDataflow<BEAN,HKEY>>{
+    public static class  CombineMetricsFiles
+    extends Combine.CombineFn<MetricsFileDataflow<InsertSizeMetrics,Integer>, MetricsFileDataflow<InsertSizeMetrics,Integer>, MetricsFileDataflow<InsertSizeMetrics,Integer>> {
 
         @Override
-        public MetricsFileDataflow<BEAN,HKEY> createAccumulator() {
+        public MetricsFileDataflow<InsertSizeMetrics,Integer> createAccumulator() {
             return new MetricsFileDataflow<>();
         }
 
         @Override
-        public MetricsFileDataflow<BEAN, HKEY> addInput(MetricsFileDataflow<BEAN, HKEY> accumulator, VI input) {
+        public MetricsFileDataflow<InsertSizeMetrics,Integer> addInput(MetricsFileDataflow<InsertSizeMetrics,Integer> accumulator, MetricsFileDataflow<InsertSizeMetrics,Integer> input) {
             return combineMetricsFiles(accumulator, input);
         }
 
-        private MetricsFileDataflow<BEAN, HKEY> combineMetricsFiles(MetricsFileDataflow<BEAN, HKEY> accumulator, MetricsFileDataflow<BEAN,HKEY> input) {
+        private MetricsFileDataflow<InsertSizeMetrics,Integer> combineMetricsFiles(MetricsFileDataflow<InsertSizeMetrics,Integer> accumulator, MetricsFileDataflow<InsertSizeMetrics,Integer> input) {
             Set<Header> headers = Sets.newLinkedHashSet(accumulator.getHeaders());
             Set<Header> inputHeaders = Sets.newLinkedHashSet(input.getHeaders());
             inputHeaders.removeAll(headers);
@@ -391,14 +397,14 @@ public class InsertSizeMetricsDataflowTransform extends PTransformSAM<InsertSize
         }
 
         @Override
-        public MetricsFileDataflow<BEAN, HKEY> mergeAccumulators(Iterable<MetricsFileDataflow<BEAN, HKEY>> accumulators) {
-            MetricsFileDataflow<BEAN, HKEY> base = createAccumulator();
+        public MetricsFileDataflow<InsertSizeMetrics,Integer> mergeAccumulators(Iterable<MetricsFileDataflow<InsertSizeMetrics,Integer>> accumulators) {
+            MetricsFileDataflow<InsertSizeMetrics,Integer> base = createAccumulator();
             accumulators.forEach(accum -> combineMetricsFiles(base,  accum));
             return base;
         }
 
         @Override
-        public MetricsFileDataflow<BEAN, HKEY> extractOutput(MetricsFileDataflow<BEAN, HKEY> accumulator) {
+        public MetricsFileDataflow<InsertSizeMetrics,Integer> extractOutput(MetricsFileDataflow<InsertSizeMetrics,Integer> accumulator) {
             return accumulator;
         }
 
