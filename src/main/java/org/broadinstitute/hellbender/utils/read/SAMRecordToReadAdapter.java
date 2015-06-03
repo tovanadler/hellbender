@@ -1,8 +1,12 @@
 package org.broadinstitute.hellbender.utils.read;
 
 
+import com.google.cloud.dataflow.sdk.coders.StandardCoder;
 import htsjdk.samtools.*;
 import htsjdk.samtools.util.Locatable;
+import org.broadinstitute.hellbender.exceptions.GATKException;
+
+import java.util.UUID;
 
 public final class SAMRecordToReadAdapter implements MutableRead {
 
@@ -120,5 +124,10 @@ public final class SAMRecordToReadAdapter implements MutableRead {
     @Override
     public void setIsUnmapped() {
         samRecord.setReadUnmappedFlag(true);
+    }
+
+    @Override
+    public UUID getUUID() {
+        throw new GATKException("getGUID not yet implemented for SAMRecordToReadAdaptor");
     }
 }

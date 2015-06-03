@@ -3,20 +3,72 @@ package org.broadinstitute.hellbender.utils.read;
 
 import com.google.api.services.genomics.model.LinearAlignment;
 import com.google.api.services.genomics.model.Position;
+import com.google.cloud.dataflow.sdk.coders.*;
+import com.google.cloud.dataflow.sdk.values.KV;
+import com.google.cloud.genomics.dataflow.coders.GenericJsonCoder;
 import htsjdk.samtools.*;
 import htsjdk.samtools.util.Locatable;
 import htsjdk.samtools.util.StringUtil;
+import org.broadinstitute.hellbender.engine.dataflow.transforms.UuidCoder;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 
 public final class GoogleGenomicsReadToReadAdapter implements MutableRead {
 
+    public static final DelegateCoder<Read, KV<UUID, com.google.api.services.genomics.model.Read>> CODER =
+            DelegateCoder.of(
+                    KvCoder.of(UuidCoder.CODER, GenericJsonCoder.of(com.google.api.services.genomics.model.Read.class)),
+                    new DelegateCoder.CodingFunction<Read, KV<UUID, com.google.api.services.genomics.model.Read>>() {
+                        @Override
+                        public KV<UUID, com.google.api.services.genomics.model.Read> apply(Read read) throws Exception {
+                            return KV.of(read.getUUID(), ((GoogleGenomicsReadToReadAdapter) read).getGoogleRead());
+                        }
+                    },
+                    new DelegateCoder.CodingFunction<KV<UUID, com.google.api.services.genomics.model.Read>, Read>() {
+                        @Override
+                        public Read apply(KV<UUID, com.google.api.services.genomics.model.Read> kv) throws Exception {
+                            return new GoogleGenomicsReadToReadAdapter(kv.getValue(), kv.getKey());
+                        }
+                    }
+            );
     private final com.google.api.services.genomics.model.Read genomicsRead;
+    private final UUID uuid;
 
-    public GoogleGenomicsReadToReadAdapter( final com.google.api.services.genomics.model.Read genomicsRead ) {
+    public GoogleGenomicsReadToReadAdapter(final com.google.api.services.genomics.model.Read genomicsRead, UUID uuid) {
         this.genomicsRead = genomicsRead;
+        this.uuid = uuid;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        GoogleGenomicsReadToReadAdapter that = (GoogleGenomicsReadToReadAdapter) o;
+
+        if (!getContig().equals(that.getContig())) {
+            return false;
+        }
+
+        if (getStart() != that.getStart()) {
+            return false;
+        }
+        if (getEnd() != that.getEnd()) {
+            return false;
+        }
+        byte[] bases = getBases();
+        byte[] bases1 = that.getBases();
+        boolean match =  Arrays.equals(bases, bases1);
+        return match;
+    }
+
+    @Override
+    public int hashCode() {
+        return genomicsRead.hashCode();
     }
 
     @Override
@@ -37,7 +89,8 @@ public final class GoogleGenomicsReadToReadAdapter implements MutableRead {
 
         // Guaranteed non-null due to isUnmapped() check above
         // Convert from 0-based to 1-based start position
-        return genomicsRead.getAlignment().getPosition().getPosition().intValue() + 1;
+        int start = genomicsRead.getAlignment().getPosition().getPosition().intValue() + 1;
+        return start;
     }
 
     @Override
@@ -49,7 +102,10 @@ public final class GoogleGenomicsReadToReadAdapter implements MutableRead {
         // Guaranteed non-null due to isUnmapped() check above
         // Position in genomicsRead is 0-based, so add getCigar().getReferenceLength() to it,
         // not getCigar().getReferenceLength() - 1, in order to convert to a 1-based end position.
-        return genomicsRead.getAlignment().getPosition().getPosition().intValue() + getCigar().getReferenceLength();
+        int start = genomicsRead.getAlignment().getPosition().getPosition().intValue() + 1;
+        int length = getCigar().getReferenceLength();
+        return start + length - 1;
+        //return genomicsRead.getAlignment().getPosition().getPosition().intValue() + getCigar().getReferenceLength();
     }
 
     @Override
@@ -179,5 +235,22 @@ public final class GoogleGenomicsReadToReadAdapter implements MutableRead {
     @Override
     public void setIsUnmapped() {
         genomicsRead.setAlignment(null);
+    }
+
+    public com.google.api.services.genomics.model.Read getGoogleRead() {
+        return genomicsRead;
+    }
+
+    @Override
+    public UUID getUUID() {
+        return uuid;
+    }
+
+    @Override
+    public String toString() {
+        return "GoogleGenomicsReadToReadAdapter{" +
+                "genomicsRead=" + genomicsRead +
+                ", uuid=" + uuid +
+                '}';
     }
 }

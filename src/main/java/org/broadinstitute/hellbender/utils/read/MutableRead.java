@@ -1,5 +1,6 @@
 package org.broadinstitute.hellbender.utils.read;
 
+import com.google.cloud.dataflow.sdk.coders.StandardCoder;
 import htsjdk.samtools.Cigar;
 import htsjdk.samtools.util.Locatable;
 

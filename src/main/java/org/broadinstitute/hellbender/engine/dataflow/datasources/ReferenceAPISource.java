@@ -14,11 +14,13 @@ import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.reference.ReferenceBases;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.security.GeneralSecurityException;
 import java.util.HashMap;
 import java.util.Map;
 
-public class ReferenceSource {
+public class ReferenceAPISource implements Serializable {
+    private static final long serialVersionUID = 1L;
 
     public static final int REFERENCE_SHARD_SIZE = 100000;
 
@@ -26,7 +28,7 @@ public class ReferenceSource {
     private final Genomics genomicsService;
     private final Map<String, String> referenceNameToIdTable;
 
-    public ReferenceSource( final String referenceName, final PipelineOptions pipelineOptions ) {
+    public ReferenceAPISource(final String referenceName, final PipelineOptions pipelineOptions) {
         this.referenceName = referenceName;
         this.genomicsService = createGenomicsService(pipelineOptions);
         this.referenceNameToIdTable = buildReferenceNameToIdTable(getReferenceSet());

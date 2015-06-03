@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
 
 public final class CountBasesTransformUnitTest {
 
-    @DataProvider(name = "sams")
+    @DataProvider(name = "refAndInts")
     public Object[][] sams(){
 
         return new Object[][]{

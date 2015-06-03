@@ -4,16 +4,14 @@ import com.google.cloud.dataflow.sdk.Pipeline;
 import com.google.cloud.dataflow.sdk.options.PipelineOptionsFactory;
 import com.google.cloud.dataflow.sdk.testing.TestPipeline;
 import com.google.cloud.genomics.dataflow.utils.GenomicsOptions;
-import org.broadinstitute.hellbender.engine.dataflow.datasources.ReferenceSource;
+import org.broadinstitute.hellbender.engine.dataflow.datasources.ReferenceAPISource;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.reference.ReferenceBases;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
-import java.util.Arrays;
 
-
-public class ReferenceSourceUnitTest {
+public class ReferenceAPISourceUnitTest {
 
     final String API_KEY = System.getenv("GOOGLE_API_KEY");
     final String TEST_PROJECT = System.getenv("TEST_PROJECT");
@@ -27,7 +25,7 @@ public class ReferenceSourceUnitTest {
         options.setApiKey(API_KEY);
         options.setProject(TEST_PROJECT);
 
-        final ReferenceSource refSource = new ReferenceSource(referenceName, options);
+        final ReferenceAPISource refSource = new ReferenceAPISource(referenceName, options);
         final ReferenceBases bases = refSource.getReferenceBases(new SimpleInterval("1", 50000, 50010));
 
         Assert.assertNotNull(bases);

@@ -10,12 +10,16 @@ import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMSequenceDictionary;
 import org.broadinstitute.hellbender.cmdline.Argument;
 import org.broadinstitute.hellbender.cmdline.ArgumentCollection;
+import org.broadinstitute.hellbender.cmdline.CommandLineProgramProperties;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
 import org.broadinstitute.hellbender.cmdline.argumentcollections.IntervalArgumentCollection;
 import org.broadinstitute.hellbender.cmdline.argumentcollections.OptionalIntervalArgumentCollection;
+import org.broadinstitute.hellbender.cmdline.programgroups.ReadProgramGroup;
 import org.broadinstitute.hellbender.engine.dataflow.*;
 import org.broadinstitute.hellbender.engine.dataflow.datasources.ReadContextData;
 import org.broadinstitute.hellbender.engine.dataflow.datasources.ReadsSource;
+import org.broadinstitute.hellbender.engine.dataflow.datasources.ReferenceAPISource;
+import org.broadinstitute.hellbender.engine.dataflow.datasources.VariantsFileSource;
 import org.broadinstitute.hellbender.engine.dataflow.transforms.GoogleReadToRead;
 import org.broadinstitute.hellbender.engine.dataflow.transforms.composite.AddContextDataToRead;
 import org.broadinstitute.hellbender.tools.recalibration.RecalibrationArgumentCollection;
@@ -28,8 +32,15 @@ import org.broadinstitute.hellbender.utils.read.ReadUtils;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
+
+@CommandLineProgramProperties(
+        usage = "It's a pipeline!",
+        usageShort = "Preprocess all the things",
+        programGroup = ReadProgramGroup.class
+)
 public class ReadsPreprocessingPipeline extends DataflowCommandLineProgram {
 
     @Argument(doc = "uri for the input bam, either a local file path or a gs:// bucket path",
@@ -54,13 +65,16 @@ public class ReadsPreprocessingPipeline extends DataflowCommandLineProgram {
                                                                                                  getAllIntervalsForReference(readsHeader.getSequenceDictionary());
 
         final PCollectionView<SAMFileHeader> headerSingleton = pipeline.apply(Create.of(readsHeader)).setCoder(SerializableCoder.of(SAMFileHeader.class)).apply(View.<SAMFileHeader>asSingleton());
-        final PCollection<com.google.api.services.genomics.model.Read> rawReads = readsSource.getReadPCollection(intervals);
+        final PCollection<KV<UUID, com.google.api.services.genomics.model.Read>> rawReads = readsSource.getReadPCollectionWithUUID(intervals);
 
         final PCollection<Read> initialReads = rawReads.apply(new GoogleReadToRead());
 
         final PCollection<Read> markedReads = initialReads.apply(new MarkDuplicatesStub(headerSingleton));
 
-        final PCollection<KV<Read, ReadContextData>> readsWithContext = markedReads.apply(new AddContextDataToRead(referenceName, baseRecalibrationKnownVariants, pipeline));
+        final VariantsFileSource variantsFileSource = new VariantsFileSource(baseRecalibrationKnownVariants, pipeline);
+        ReferenceAPISource referenceAPISource = new ReferenceAPISource(referenceName, pipeline.getOptions());
+
+        final PCollection<KV<Read, ReadContextData>> readsWithContext = AddContextDataToRead.Add(markedReads, referenceAPISource, variantsFileSource);
         final PCollection<RecalibrationTables> recalibrationReports = readsWithContext.apply(new BaseRecalibratorStub(headerSingleton));
         final PCollectionView<RecalibrationTables> mergedRecalibrationReport = recalibrationReports.apply(View.<RecalibrationTables>asSingleton());
 

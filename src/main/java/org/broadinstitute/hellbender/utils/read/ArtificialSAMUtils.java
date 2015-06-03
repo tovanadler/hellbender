@@ -194,6 +194,15 @@ public final class ArtificialSAMUtils {
         return ArtificialSAMUtils.createArtificialRead(cigar);
     }
 
+    public static SAMRecord createRandomRead(int start, int length) {
+        List<CigarElement> cigarElements = new LinkedList<>();
+        cigarElements.add(new CigarElement(length, CigarOperator.M));
+        Cigar cigar = new Cigar(cigarElements);
+        SAMRecord artificialRead = ArtificialSAMUtils.createArtificialRead(cigar);
+        artificialRead.setAlignmentStart(start);
+        return artificialRead;
+    }
+
     public static SAMRecord createRandomRead(int length, boolean allowNs) {
         byte[] quals = createRandomReadQuals(length);
         byte[] bbases = createRandomReadBases(length, allowNs);

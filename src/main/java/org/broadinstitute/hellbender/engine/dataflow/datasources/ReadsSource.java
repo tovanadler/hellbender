@@ -3,6 +3,7 @@ package org.broadinstitute.hellbender.engine.dataflow.datasources;
 import com.google.api.services.genomics.model.Read;
 import com.google.api.services.storage.Storage;
 import com.google.cloud.dataflow.sdk.Pipeline;
+import com.google.cloud.dataflow.sdk.values.KV;
 import com.google.cloud.dataflow.sdk.values.PCollection;
 import com.google.cloud.genomics.dataflow.readers.bam.BAMIO;
 import com.google.cloud.genomics.dataflow.readers.bam.ReadBAMTransform;
@@ -15,6 +16,7 @@ import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SamReader;
 import htsjdk.samtools.SamReaderFactory;
 import htsjdk.samtools.ValidationStringency;
+import org.broadinstitute.hellbender.engine.dataflow.transforms.AddGuidToGoogleRead;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
@@ -24,6 +26,7 @@ import org.broadinstitute.hellbender.utils.dataflow.DataflowUtils;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -90,6 +93,36 @@ public final class ReadsSource {
      */
     public PCollection<Read> getReadPCollection(List<SimpleInterval> intervals) {
         return getReadPCollection(intervals, ValidationStringency.SILENT);
+    }
+
+    /**
+     * Create a {@link PCollection<Read>} containing all the reads overlapping the given intervals. Malformed reads are ignored.
+     * @param intervals a list of SimpleIntervals.  These must be non-overlapping intervals or the results are undefined.
+     * @return a PCollection containing all the reads that overlap the given intervals.
+     */
+    public PCollection<KV<UUID, Read>> getReadPCollectionWithUUID(List<SimpleInterval> intervals) {
+        return getReadPCollectionWithUUID(intervals, ValidationStringency.SILENT);
+    }
+    /**
+     * Create a {@link PCollection<Read>} containing all the reads overlapping the given intervals.
+     * @param intervals a list of SimpleIntervals.  These must be non-overlapping intervals or the results are undefined.
+     * @param stringency how to react to malformed reads.
+     * @return a PCollection containing all the reads that overlap the given intervals.
+     */
+    public PCollection<KV<UUID, Read>> getReadPCollectionWithUUID(List<SimpleInterval> intervals, ValidationStringency stringency) {
+        PCollection<Read> preads;
+        if(cloudStorageUrl){
+            Iterable<Contig> contigs = intervals.stream()
+                    .map(i -> new Contig(i.getContig(), i.getStart(), i.getEnd()))
+                    .collect(Collectors.toList());
+
+            preads = ReadBAMTransform.getReadsFromBAMFilesSharded(pipeline, auth, contigs, stringency, ImmutableList.of(bam));
+        } else {
+            preads = DataflowUtils.getReadsFromLocalBams(pipeline, intervals, ImmutableList.of(new File(bam)));
+        }
+
+        // HACK: add the UUIDs for each read. This really should get pushed into the creation methods.
+        return preads.apply(new AddGuidToGoogleRead());
     }
 
     /**
