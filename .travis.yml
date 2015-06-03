@@ -4,8 +4,16 @@ jdk:
 env:
   matrix:
   - TERM=dumb
+  - CLOUD=true
+  - CLOUD=false
   global:
+  #COVERALLS_REPO_TOKEN
   - secure: RA4LKD82cW+0xPayPVAWSpYqJu5uoPcz7oXXYtYNVuilFmS8PGYx0g/BXs4QMvQsGMt6aMLN8m7lMAPN5XTH/8JSeM3VmQ3mdpgNdP+p3CVlwrapZ2lTq27Wb/E8J1CGEHOg76z716t//FUElyC/gdhS+tfBmXk3YanM5fMXEHs=
+  #HELLBENDER_TEST_APIKEY
+  - secure: GyC3Th11Gryeokc2UucWTS/Rc6AB+4ZRcSzpmLliTEtrCvDt+sXPxTH9z7GKiwqz0Ep91TTot/G8fDdSIUa+50itV1WKGDtkoRAvkG6Mt7bWm+5Cy6ZbPhktX+dWR5ks/9R8EBlJ5oiC6WkMcqlwZ90DftcHYOOF5+4ToCp7HzM= 
+  - HELLBENDER_TEST_INPUTS=gs://hellbender/test/resources/org/broadinstitute/hellbender/tools/BQSR/
+  - HELLBENDER_TEST_STAGING=gs://hellbender/test/staging/
+  - HELLBENDER_TEST_PROJECT=broad-dsde-dev
 cache:
   directories:
   - ~/.gradle

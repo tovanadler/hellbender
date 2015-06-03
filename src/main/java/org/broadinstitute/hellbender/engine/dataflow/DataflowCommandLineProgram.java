@@ -52,7 +52,7 @@ public abstract class DataflowCommandLineProgram extends CommandLineProgram impl
 
     @Argument(doc = "path to the client secrets file for google cloud authentication, necessary if accessing data from buckets.",
             shortName = "secret", fullName = "client_secret", optional=true)
-    protected File clientSecret = new File("client-secrets.json");
+    protected File clientSecret;
 
     @Argument(doc = "API Key for Google Cloud (unnecessary if a client secrets file is provided).",
             shortName = "apiKey", fullName = "apiKey", optional=true)
