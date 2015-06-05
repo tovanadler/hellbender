@@ -1,5 +1,6 @@
 package org.broadinstitute.hellbender.utils;
 
+import com.google.common.base.Strings;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -616,5 +617,21 @@ public final class Utils {
         }
 
         return c;
+    }
+
+    /**
+     * Create a new string thats a n duplicate copies of s
+     *
+     * use Strings.repeat
+     */
+    @Deprecated
+    public static String dupString(final String s, int nCopies) {
+        return Strings.repeat(s, nCopies);
+    }
+
+    public static String dupString(char c, int nCopies) {
+        char[] chars = new char[nCopies];
+        Arrays.fill(chars, c);
+        return new String(chars);
     }
 }
