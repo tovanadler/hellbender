@@ -266,7 +266,7 @@ public final class AlignmentUtils {
      *
      * If read is not mapped (i.e., doesn't have a cigar) returns 0
      *
-     * @param r a non-null GATKSAMRecord
+     * @param r a non-null SAMRecord
      * @return the number of bases aligned to the genome in R, including soft clipped bases
      */
     public static int getNumAlignedBasesCountingSoftClips(final SAMRecord r) {
@@ -308,7 +308,7 @@ public final class AlignmentUtils {
      *
      * Handles the case where the cigar is null (i.e., the read is unmapped), returning 0
      *
-     * @param read a non-null GATKSAMRecord.
+     * @param read a non-null SAMRecord.
      * @param qualThreshold consider bases with quals > this value as high quality.  Must be >= 0
      * @return positive integer
      */
