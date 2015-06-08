@@ -44,6 +44,7 @@ public final class ApplyBQSRTransform extends PTransform<PCollection<Read>, PCol
     public PCollection<Read> apply(PCollection<Read> input) {
         return input.apply(ParDo
                 .named("ApplyBQSR")
+                .withSideInputs(recalView)
                 .of(new ApplyBQSR()));
     }
 
