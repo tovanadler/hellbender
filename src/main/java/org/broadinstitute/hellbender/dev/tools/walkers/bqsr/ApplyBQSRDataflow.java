@@ -105,7 +105,7 @@ public final class ApplyBQSRDataflow extends DataflowCommandLineProgram {
         //final List<SimpleInterval> intervals = intervalArgumentCollection.intervalsSpecified() ? intervalArgumentCollection.getIntervals(sequenceDictionary) :
         //        IntervalUtils.getAllIntervalsForReference(sequenceDictionary);
         final BaseRecalOutput recalInfo = new BaseRecalOutput(BQSR_RECAL_FILE);
-        PCollection<BaseRecalOutput> recalInfoSingletonCollection = pipeline.apply(Create.of(recalInfo));
+        PCollection<BaseRecalOutput> recalInfoSingletonCollection = pipeline.apply(Create.of(recalInfo).withName("recal_file ingest"));
         PCollection<Read> output = input // readsSource.getReadPCollection(intervals, ValidationStringency.SILENT)
             .apply(new ApplyBQSRTransform(header, recalInfoSingletonCollection, bqsrOpts));
         SmallBamWriter.writeToFile(pipeline, output, header, OUTPUT);
@@ -125,7 +125,8 @@ public final class ApplyBQSRDataflow extends DataflowCommandLineProgram {
             header = reader.getFileHeader();
 
             final SAMSequenceDictionary sequenceDictionary = header.getSequenceDictionary();
-            final List<SimpleInterval> intervals = IntervalUtils.getAllIntervalsForReference(sequenceDictionary);
+            final List<SimpleInterval> intervals = intervalArgumentCollection.intervalsSpecified() ? intervalArgumentCollection.getIntervals(sequenceDictionary) :
+                    IntervalUtils.getAllIntervalsForReference(sequenceDictionary);
             return new ReadsSource(filename, pipeline).getReadPCollection(intervals, ValidationStringency.SILENT);
         } else {
             // ingestion from local file
@@ -137,11 +138,12 @@ public final class ApplyBQSRDataflow extends DataflowCommandLineProgram {
                     Read e = ReadConverter.makeRead(sr);
                     readLst.add(e);
                 } catch (SAMException x) {
-                    logger.warn("Skipping read " + sr.getReadName() + " because we can't convert it.");
+                    logger.warn("Skipping read " + sr.getReadName() + " because we can't convert it. "+x.getMessage());
                 } catch (NullPointerException y) {
                     logger.warn("Skipping read " + sr.getReadName() + " because we can't convert it. (null?)");
                 }
             }
+            logger.info("Input contains "+readLst.size()+" reads.");
             return pipeline.apply(Create.of(readLst).withName("input ingest"));
         }
     }

@@ -69,12 +69,15 @@ public class SmallBamWriter implements Serializable {
             logger.info("Saving to " + dest);
             Iterable<Read> reads = c.sideInput(iterableView);
             OutputStream outputStream = BucketUtils.createFile(dest, c.getPipelineOptions());
+            int count=0;
             try (SAMFileWriter writer = new SAMFileWriterFactory().makeBAMWriter(header, false, outputStream)) {
                 for (Read r : reads) {
+                    count++;
                     final SAMRecord sr = GenomicsConverter.makeSAMRecord(r, header);
                     writer.addAlignment(sr);
                 }
             }
+            logger.info("Wrote "+count+" reads.");
         }
     }
 }
