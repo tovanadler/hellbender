@@ -11,12 +11,12 @@ import com.google.cloud.dataflow.sdk.transforms.DoFn;
 import com.google.cloud.dataflow.sdk.util.SerializableUtils;
 import com.google.cloud.dataflow.sdk.values.KV;
 import com.google.cloud.dataflow.sdk.values.PCollection;
-import com.google.cloud.dataflow.sdk.values.POutput;
 import com.google.cloud.genomics.dataflow.utils.DataflowWorkarounds;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
 import htsjdk.samtools.SAMRecord;
-import htsjdk.samtools.metrics.Header;
 import htsjdk.samtools.metrics.StringHeader;
+import org.broadinstitute.hellbender.engine.dataflow.GATKTestPipeline;
 import org.broadinstitute.hellbender.engine.dataflow.ReadsSource;
 import org.broadinstitute.hellbender.tools.picard.analysis.InsertSizeMetrics;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
@@ -26,6 +26,9 @@ import org.testng.Assert;
 import org.testng.annotations.Test;
 
 import java.io.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -94,45 +97,60 @@ public final class InsertSizeMetricsTransformUnitTest{
         Assert.assertEquals(result.getMin(),1.0);
     }
 
-    @Test(groups = "dataflow")
-    public void testHistogramCombiner(){
-        Combine.CombineFn<KV<InsertSizeMetricsDataflowTransform.AggregationLevel, DataflowHistogram<Integer>>,?, InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer>> combiner = new InsertSizeMetricsDataflowTransform.CombineHistogramsIntoMetricsFile(10.0, null, 0.05f);
-        SAMRecord read1 = ArtificialSAMUtils.createPair(ArtificialSAMUtils.createArtificialSamHeader(), "Read1", 100, 4, 200, true, false).get(0);
-        InsertSizeMetricsDataflowTransform.AggregationLevel aggregationLevel = new InsertSizeMetricsDataflowTransform.AggregationLevel(read1, false, false, false);
 
+    public <K,V> List<KV<K,V>> kvZip(Iterable<K> keys, Iterable<V> values){
+        Iterator<K> keysIter = keys.iterator();
+        Iterator<V> valuesIter = values.iterator();
+        List<KV<K, V>> kvs = new ArrayList<>();
+        while(keysIter.hasNext() || valuesIter.hasNext()){
+            kvs.add(KV.of(keysIter.next(), valuesIter.next()));
+        }
+        if(keysIter.hasNext() || valuesIter.hasNext()){
+            throw new IllegalArgumentException("there were different numbers of keys and values");
+        }
+        return kvs;
+    }
+
+    @Test(groups = "dataflow")
+    public void combineHistogramsIntoFileTest(){
+        Combine.CombineFn<KV<InsertSizeAggregationLevel, DataflowHistogram<Integer>>,?, InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer>> combiner = new CombineHistogramsIntoMetricsFile(10.0, null, 0.05f);
+        SAMRecord read1 = ArtificialSAMUtils.createPair(ArtificialSAMUtils.createArtificialSamHeader(), "Read1", 100, 4, 200, true, false).get(0);
+
+        List<DataflowHistogram<Integer>> histograms = Collections.nCopies(10, createDummyHistogram()); //create 10 histograms
+        List<InsertSizeAggregationLevel> keys = IntStream.range(0,10) //create 10 keys, half of which are aggregated by library and half of which aren't
+                .boxed()
+                .map( i -> 1 % 2 == 0)
+                .map(b -> new InsertSizeAggregationLevel(read1, b, false, false))
+                .collect(Collectors.toList());
+
+        List<KV<InsertSizeAggregationLevel,DataflowHistogram<Integer>>> keyedHistograms = kvZip(keys,histograms);
+        InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics, Integer> result = combiner.apply(keyedHistograms);
+        Assert.assertEquals(result.getAllHistograms().size(), 10);
+    }
+
+    private DataflowHistogram<Integer> createDummyHistogram() {
         DataflowHistogram<Integer> h1= new DataflowHistogram<>();
         h1.addInput(10);
         h1.addInput(20);
         h1.addInput(10);
-
-        DataflowHistogram<Integer> h2= new DataflowHistogram<>();
-        h2.addInput(10);
-        h2.addInput(20);
-        h2.addInput(10);
-
-        DataflowHistogram<Integer> h3= new DataflowHistogram<>();
-        h3.addInput(10);
-        h3.addInput(20);
-        h3.addInput(10);
-
-        List<DataflowHistogram<Integer>> histograms = Lists.newArrayList(h1, h2, h3);
-
-        List<KV<InsertSizeMetricsDataflowTransform.AggregationLevel,DataflowHistogram<Integer>>> keyedHistograms = histograms.stream().map(h -> KV.of(aggregationLevel, h)).collect(Collectors.toList());
-        InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics, Integer> result = combiner.apply(keyedHistograms);
-        Assert.assertEquals(result.getAllHistograms().size(), 3);
+        return h1;
     }
 
     @Test
     public void testCombineMetricsFilePTransform(){
-        Pipeline p = TestPipeline.create();
+        Pipeline p = GATKTestPipeline.create();
+        p.getCoderRegistry().registerCoder(InsertSizeMetricsDataflowTransform.MetricsFileDataflow.class, SerializableCoder.of(InsertSizeMetricsDataflowTransform.MetricsFileDataflow.class));
+
 
         InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer> mf1 = new InsertSizeMetricsDataflowTransform.MetricsFileDataflow<>();
         mf1.addMetric(new InsertSizeMetrics());
         mf1.addHeader(new StringHeader("header1"));
+        mf1.addHistogram(createDummyHistogram());
 
         InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer> mf2 = new InsertSizeMetricsDataflowTransform.MetricsFileDataflow<>();
         mf2.addMetric(new InsertSizeMetrics());
         mf2.addHeader(new StringHeader("header2"));
+        mf2.addHistogram(createDummyHistogram());
 
         InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer> mf3 = new InsertSizeMetricsDataflowTransform.MetricsFileDataflow<>();
         mf3.addMetric(new InsertSizeMetrics());
@@ -141,11 +159,12 @@ public final class InsertSizeMetricsTransformUnitTest{
 
         PCollection<InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics, Integer>> files = p.apply(Create.of(Lists.newArrayList(mf1, mf2, mf3)));
         PCollection<InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics, Integer>> combined = files.apply(Combine.globally(new InsertSizeMetricsDataflowTransform.CombineMetricsFiles()));
+        DirectPipelineRunner.EvaluationResults results =  (DirectPipelineRunner.EvaluationResults)p.run();
+        InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics, Integer> metricsFile = results.getPCollection(combined).get(0);
 
-
+        Assert.assertEquals(Sets.newHashSet(metricsFile.getHeaders()), Sets.newHashSet(new StringHeader("header1"), new StringHeader("header2"),new StringHeader("header3")));
+        Assert.assertEquals(metricsFile.getAllHistograms().size(), 2);
     }
-
-
 
 
     @Test
@@ -155,9 +174,7 @@ public final class InsertSizeMetricsTransformUnitTest{
                 InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer>> combiner =
                 new InsertSizeMetricsDataflowTransform.CombineMetricsFiles();
 
-        InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer> mf1 = new InsertSizeMetricsDataflowTransform.MetricsFileDataflow<>();
-        mf1.addMetric(new InsertSizeMetrics());
-        mf1.addHeader(new StringHeader("header1"));
+        InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics, Integer> mf1 = getInsertSizeMetricsIntegerMetricsFileDataflow();
 
         InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer> mf2 = new InsertSizeMetricsDataflowTransform.MetricsFileDataflow<>();
         mf2.addMetric(new InsertSizeMetrics());
@@ -173,6 +190,13 @@ public final class InsertSizeMetricsTransformUnitTest{
         Assert.assertEquals(combined.getAllHistograms().size(), 0);
         Assert.assertEquals(combined.getHeaders().size(), 3);
 
+    }
+
+    private static InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics, Integer> getInsertSizeMetricsIntegerMetricsFileDataflow() {
+        InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics,Integer> mf1 = new InsertSizeMetricsDataflowTransform.MetricsFileDataflow<>();
+        mf1.addMetric(new InsertSizeMetrics());
+        mf1.addHeader(new StringHeader("header1"));
+        return mf1;
     }
 
     private static class MetricsFileDataflowBooleanDoFn extends DoFn<InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics, Integer>, Boolean> {
@@ -215,5 +239,8 @@ public final class InsertSizeMetricsTransformUnitTest{
         in.close();
         Assert.assertEquals(deserializedMetrics.getAllHistograms(),metrics.getAllHistograms());
     }
+
+
+
 
 }
