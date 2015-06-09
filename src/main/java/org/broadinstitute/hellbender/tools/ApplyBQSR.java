@@ -1,5 +1,8 @@
 package org.broadinstitute.hellbender.tools;
 
+import com.google.api.services.genomics.model.Read;
+import com.google.cloud.genomics.dataflow.readers.bam.ReadConverter;
+import com.google.cloud.genomics.gatk.common.GenomicsConverter;
 import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMFileWriter;
 import htsjdk.samtools.SAMFileWriterFactory;
@@ -18,6 +21,7 @@ import org.broadinstitute.hellbender.transformers.ReadTransformer;
 import org.broadinstitute.hellbender.utils.read.ReadUtils;
 
 import java.io.File;
+import java.io.FileWriter;
 
 @CommandLineProgramProperties(
         usage = "Applies the BQSR table to the input BAM.",
@@ -48,21 +52,46 @@ public final class ApplyBQSR extends ReadWalker{
 
     private ReadTransformer transform;
 
+    // DEBUG HACK
+    private File readsDebugOutput = new File("temp-abqsr-nondataflow-output.txt");
+    private FileWriter readsDebug;
+
     @Override
     public void onTraversalStart() {
         final SAMFileHeader outputHeader = ReadUtils.clone(getHeaderForReads());
         outputWriter = new SAMFileWriterFactory().makeWriter(outputHeader, true, OUTPUT, referenceArguments.getReferenceFile());
         transform = new BQSRReadTransformer(BQSR_RECAL_FILE, bqsrOpts.quantizationLevels, bqsrOpts.disableIndelQuals, bqsrOpts.PRESERVE_QSCORES_LESS_THAN, bqsrOpts.emitOriginalQuals, bqsrOpts.globalQScorePrior);
+        try {
+            readsDebug = new FileWriter(readsDebugOutput);
+        } catch (Exception x) {
+            throw new RuntimeException(x);
+        }
     }
 
     @Override
     public void apply( SAMRecord read, ReferenceContext referenceContext, FeatureContext featureContext ) {
-        outputWriter.addAlignment(transform.apply(read));
+        SAMRecord transformed = transform.apply(read);
+        outputWriter.addAlignment(transformed);
+        if (transformed.getReadName().equals("20GAVAAXX100126:8:5:8975:183748")) {
+            // breakpoint
+            int i=0;
+        }
+        Read e = ReadConverter.makeRead(transformed);
+        try {
+        readsDebug.write(e.toString()+"\n");
+        } catch (Exception x) {
+            throw new RuntimeException(x);
+        }
     }
 
     @Override
     public Object onTraversalDone() {
         CloserUtil.close(outputWriter);
+        try {
+        readsDebug.close();
+        } catch (Exception x) {
+            throw new RuntimeException(x);
+        }
         return null;
     }
 

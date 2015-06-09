@@ -2,6 +2,7 @@ package org.broadinstitute.hellbender.dev.tools.walkers.bqsr;
 
 import com.google.api.services.genomics.model.Read;
 import com.google.cloud.dataflow.sdk.Pipeline;
+import com.google.cloud.dataflow.sdk.io.TextIO;
 import com.google.cloud.dataflow.sdk.transforms.Create;
 import com.google.cloud.dataflow.sdk.util.GcsUtil;
 import com.google.cloud.dataflow.sdk.util.gcsfs.GcsPath;
@@ -42,6 +43,7 @@ import org.broadinstitute.hellbender.transformers.ReadTransformer;
 import org.broadinstitute.hellbender.utils.IntervalUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.dataflow.BucketUtils;
+import org.broadinstitute.hellbender.utils.dataflow.DataflowUtils;
 import org.broadinstitute.hellbender.utils.read.ReadUtils;
 
 import java.io.File;
@@ -109,6 +111,7 @@ public final class ApplyBQSRDataflow extends DataflowCommandLineProgram {
         PCollection<Read> output = input // readsSource.getReadPCollection(intervals, ValidationStringency.SILENT)
             .apply(new ApplyBQSRTransform(header, recalInfoSingletonCollection, bqsrOpts));
         SmallBamWriter.writeToFile(pipeline, output, header, OUTPUT);
+        output.apply(DataflowUtils.convertToString()).apply(TextIO.Write.to("temp-abqsr-output.txt"));
     }
 
     /** reads local disks or GCS -> header, and PCollection */

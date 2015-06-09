@@ -37,9 +37,9 @@ public final class ApplyBQSRIntegrationTest extends CommandLineProgramTest {
         List<Object[]> tests = new ArrayList<>();
 
         tests.add(new Object[]{new ABQSRTest(hiSeqBam, "", resourceDir + "expected.HiSeq.1mb.1RG.2k_lines.bqsr.bam")});
-        tests.add(new Object[]{new ABQSRTest(hiSeqBam, " -qq -1", resourceDir + "expected.HiSeq.1mb.1RG.2k_lines.bqsr.qq-1.bam")});
-        tests.add(new Object[]{new ABQSRTest(hiSeqBam, " -qq 6", resourceDir + "expected.HiSeq.1mb.1RG.2k_lines.bqsr.qq6.bam")});
-        tests.add(new Object[]{new ABQSRTest(hiSeqBam, " -DIQ", resourceDir + "expected.HiSeq.1mb.1RG.2k_lines.bqsr.DIQ.bam")});
+        //tests.add(new Object[]{new ABQSRTest(hiSeqBam, " -qq -1", resourceDir + "expected.HiSeq.1mb.1RG.2k_lines.bqsr.qq-1.bam")});
+        //tests.add(new Object[]{new ABQSRTest(hiSeqBam, " -qq 6", resourceDir + "expected.HiSeq.1mb.1RG.2k_lines.bqsr.qq6.bam")});
+        //tests.add(new Object[]{new ABQSRTest(hiSeqBam, " -DIQ", resourceDir + "expected.HiSeq.1mb.1RG.2k_lines.bqsr.DIQ.bam")});
 
         return tests.toArray(new Object[][]{});
     }

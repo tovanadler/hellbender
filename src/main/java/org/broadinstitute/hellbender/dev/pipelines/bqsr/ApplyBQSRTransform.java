@@ -28,7 +28,7 @@ public final class ApplyBQSRTransform extends PTransform<PCollection<Read>, PCol
 
     /**
      * @param header The SAM header that corresponds to the reads you're going to pass as input.
-     * @param phaseOne the output from BaseRecalibration
+     * @param phaseOne the output from BaseRecalibration, with a single BaseRecalOutput object.
      * @param options the recalibration options
      */
     public ApplyBQSRTransform(SAMFileHeader header, PCollection<BaseRecalOutput> phaseOne, ApplyBQSRArgumentCollection options) {
