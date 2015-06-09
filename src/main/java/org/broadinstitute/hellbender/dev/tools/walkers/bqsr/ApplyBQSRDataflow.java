@@ -109,9 +109,8 @@ public final class ApplyBQSRDataflow extends DataflowCommandLineProgram {
         final BaseRecalOutput recalInfo = new BaseRecalOutput(BQSR_RECAL_FILE);
         PCollection<BaseRecalOutput> recalInfoSingletonCollection = pipeline.apply(Create.of(recalInfo).withName("recal_file ingest"));
         PCollection<Read> output = input // readsSource.getReadPCollection(intervals, ValidationStringency.SILENT)
-            .apply(new ApplyBQSRTransform(header, recalInfoSingletonCollection, bqsrOpts));
+           .apply(new ApplyBQSRTransform(header, recalInfoSingletonCollection, bqsrOpts));
         SmallBamWriter.writeToFile(pipeline, output, header, OUTPUT);
-        output.apply(DataflowUtils.convertToString()).apply(TextIO.Write.to("temp-abqsr-output.txt"));
     }
 
     /** reads local disks or GCS -> header, and PCollection */

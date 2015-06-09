@@ -72,10 +72,6 @@ public final class ApplyBQSR extends ReadWalker{
     public void apply( SAMRecord read, ReferenceContext referenceContext, FeatureContext featureContext ) {
         SAMRecord transformed = transform.apply(read);
         outputWriter.addAlignment(transformed);
-        if (transformed.getReadName().equals("20GAVAAXX100126:8:5:8975:183748")) {
-            // breakpoint
-            int i=0;
-        }
         Read e = ReadConverter.makeRead(transformed);
         try {
         readsDebug.write(e.toString()+"\n");

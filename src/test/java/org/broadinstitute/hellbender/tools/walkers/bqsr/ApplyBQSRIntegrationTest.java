@@ -30,16 +30,16 @@ public final class ApplyBQSRIntegrationTest extends CommandLineProgramTest {
     }
 
     final String resourceDir = getTestDataDir() + "/" + "BQSR" + "/";
-    final String hiSeqBam = resourceDir + "HiSeq.1mb.1RG.2k_lines.bam";
+    final String hiSeqBam = resourceDir + "HiSeq.1mb.1RG.2k_lines.alternate.bam";
 
     @DataProvider(name = "ApplyBQSRTest")
     public Object[][] createABQSRTestData() {
         List<Object[]> tests = new ArrayList<>();
 
-        tests.add(new Object[]{new ABQSRTest(hiSeqBam, "", resourceDir + "expected.HiSeq.1mb.1RG.2k_lines.bqsr.bam")});
-        //tests.add(new Object[]{new ABQSRTest(hiSeqBam, " -qq -1", resourceDir + "expected.HiSeq.1mb.1RG.2k_lines.bqsr.qq-1.bam")});
-        //tests.add(new Object[]{new ABQSRTest(hiSeqBam, " -qq 6", resourceDir + "expected.HiSeq.1mb.1RG.2k_lines.bqsr.qq6.bam")});
-        //tests.add(new Object[]{new ABQSRTest(hiSeqBam, " -DIQ", resourceDir + "expected.HiSeq.1mb.1RG.2k_lines.bqsr.DIQ.bam")});
+        tests.add(new Object[]{new ABQSRTest(hiSeqBam, "", resourceDir + "expected.HiSeq.1mb.1RG.2k_lines.bqsr.alternate.bam")});
+        tests.add(new Object[]{new ABQSRTest(hiSeqBam, " -qq -1", resourceDir + "expected.HiSeq.1mb.1RG.2k_lines.bqsr.qq-1.alternate.bam")});
+        tests.add(new Object[]{new ABQSRTest(hiSeqBam, " -qq 6", resourceDir + "expected.HiSeq.1mb.1RG.2k_lines.bqsr.qq6.alternate.bam")});
+        tests.add(new Object[]{new ABQSRTest(hiSeqBam, " -DIQ", resourceDir + "expected.HiSeq.1mb.1RG.2k_lines.bqsr.DIQ.alternate.bam")});
 
         return tests.toArray(new Object[][]{});
     }
