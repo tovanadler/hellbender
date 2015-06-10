@@ -52,42 +52,21 @@ public final class ApplyBQSR extends ReadWalker{
 
     private ReadTransformer transform;
 
-    // DEBUG HACK
-    private File readsDebugOutput = new File("temp-abqsr-nondataflow-output.txt");
-    private FileWriter readsDebug;
-
     @Override
     public void onTraversalStart() {
         final SAMFileHeader outputHeader = ReadUtils.clone(getHeaderForReads());
         outputWriter = new SAMFileWriterFactory().makeWriter(outputHeader, true, OUTPUT, referenceArguments.getReferenceFile());
         transform = new BQSRReadTransformer(BQSR_RECAL_FILE, bqsrOpts.quantizationLevels, bqsrOpts.disableIndelQuals, bqsrOpts.PRESERVE_QSCORES_LESS_THAN, bqsrOpts.emitOriginalQuals, bqsrOpts.globalQScorePrior);
-        try {
-            readsDebug = new FileWriter(readsDebugOutput);
-        } catch (Exception x) {
-            throw new RuntimeException(x);
-        }
     }
 
     @Override
     public void apply( SAMRecord read, ReferenceContext referenceContext, FeatureContext featureContext ) {
-        SAMRecord transformed = transform.apply(read);
-        outputWriter.addAlignment(transformed);
-        Read e = ReadConverter.makeRead(transformed);
-        try {
-        readsDebug.write(e.toString()+"\n");
-        } catch (Exception x) {
-            throw new RuntimeException(x);
-        }
+        outputWriter.addAlignment(transform.apply(read));
     }
 
     @Override
     public Object onTraversalDone() {
         CloserUtil.close(outputWriter);
-        try {
-        readsDebug.close();
-        } catch (Exception x) {
-            throw new RuntimeException(x);
-        }
         return null;
     }
 
