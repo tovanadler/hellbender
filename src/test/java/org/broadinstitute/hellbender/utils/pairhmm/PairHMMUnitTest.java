@@ -1,21 +1,22 @@
 package org.broadinstitute.hellbender.utils.pairhmm;
 
+import htsjdk.samtools.SAMRecord;
 import org.broadinstitute.hellbender.utils.BaseUtils;
 import org.broadinstitute.hellbender.utils.MathUtils;
 import org.broadinstitute.hellbender.utils.QualityUtils;
 import org.broadinstitute.hellbender.utils.Utils;
+import org.broadinstitute.hellbender.utils.genotyper.LikelihoodMatrix;
+import org.broadinstitute.hellbender.utils.haplotype.Haplotype;
+import org.broadinstitute.hellbender.utils.read.ArtificialSAMUtils;
 import org.broadinstitute.hellbender.utils.test.BaseTest;
 import org.testng.Assert;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 
-public class PairHMMUnitTest extends BaseTest {
+public final class PairHMMUnitTest extends BaseTest {
     private final static boolean ALLOW_READS_LONGER_THAN_HAPLOTYPE = true;
     private final static boolean DEBUG = false;
     final static boolean EXTENSIVE_TESTING = true;
@@ -363,6 +364,11 @@ public class PairHMMUnitTest extends BaseTest {
                 Utils.dupBytes(insQual, readBases.length),
                 Utils.dupBytes(delQual, readBases.length),
                 Utils.dupBytes(gcp, readBases.length), true, null);
+        double expected = getExpectedMathingLikelihood(readBases, refBases, baseQual, insQual);
+        Assert.assertEquals(d, expected, 1e-3, "Likelihoods should sum to just the error prob of the read " + String.format("readSize=%d refSize=%d", readSize, refSize));
+    }
+
+    private double getExpectedMathingLikelihood(byte[] readBases, byte[] refBases, byte baseQual, byte insQual) {
         double expected =  0;
         final double initialCondition = ((double) Math.abs(refBases.length - readBases.length + 1))/refBases.length;
         if (readBases.length < refBases.length) {
@@ -370,7 +376,7 @@ public class PairHMMUnitTest extends BaseTest {
         } else if (readBases.length > refBases.length) {
             expected = Math.log10(initialCondition * Math.pow(QualityUtils.qualToProb(baseQual), refBases.length) * Math.pow(QualityUtils.qualToErrorProb(insQual), readBases.length - refBases.length));
         }
-        Assert.assertEquals(d, expected, 1e-3, "Likelihoods should sum to just the error prob of the read " + String.format("readSize=%d refSize=%d", readSize, refSize));
+        return expected;
     }
 
     @DataProvider(name = "HMMProviderWithBigReads")
@@ -463,6 +469,103 @@ public class PairHMMUnitTest extends BaseTest {
         }
     }
 
+    @Test(dataProvider = "JustHMMProvider")
+    public void testLikelihoodsFromHaplotypes(final PairHMM hmm){
+        final int readSize= 10;
+        final int refSize = 20;
+        final byte[] readBases =  Utils.dupBytes((byte)'A', readSize);
+        final byte[] refBases = Utils.dupBytes((byte) 'A', refSize);
+        final byte baseQual = 20;
+        final byte insQual = 100;
+        final byte gcp = 100;
+
+        final Haplotype refH= new Haplotype(refBases, true);
+
+        final byte[] readQuals= Utils.dupBytes(baseQual, readBases.length);
+        final List<SAMRecord> reads = Arrays.asList(ArtificialSAMUtils.createArtificialRead(readBases, readQuals, readBases.length + "M"));
+        final Map<SAMRecord, byte[]> gpcs = buildGapContinuationPenalties(reads, gcp);
+
+        hmm.computeLikelihoods(matrix(Arrays.asList(refH)), Collections.emptyList(), gpcs);
+        Assert.assertEquals(hmm.getLikelihoodArray(), null);
+
+        hmm.computeLikelihoods(matrix(Arrays.asList(refH)), reads, gpcs);
+        final double expected = getExpectedMathingLikelihood(readBases, refBases, baseQual, insQual);
+        final double[] la = hmm.getLikelihoodArray();
+
+        Assert.assertEquals(la.length, 1);
+        Assert.assertEquals(la[0], expected, 1e-3, "Likelihoods should sum to just the error prob of the read " + String.format("readSize=%d refSize=%d", readSize, refSize));
+
+    }
+
+    private LikelihoodMatrix<Haplotype> matrix(final List<Haplotype> haplotypes) {
+        return new LikelihoodMatrix<Haplotype>() {
+            @Override
+            public List<SAMRecord> reads() {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public List<Haplotype> alleles() {
+                return haplotypes;
+            }
+
+            @Override
+            public void set(int alleleIndex, int readIndex, double value) {
+//                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public double get(int alleleIndex, int readIndex) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public int alleleIndex(Haplotype allele) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public int readIndex(SAMRecord read) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public int alleleCount() {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public int readCount() {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public Haplotype alleleAt(int alleleIndex) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public SAMRecord readAt(int readIndex) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void copyAlleleLikelihoods(int alleleIndex, double[] dest, int offset) {
+                throw new UnsupportedOperationException();
+            }
+        };
+    }
+
+    private static Map<SAMRecord, byte[]> buildGapContinuationPenalties(final List<SAMRecord> processedReads, final byte gcp) {
+        final Map<SAMRecord,byte[]> result = new HashMap<>(processedReads.size());
+        for (final SAMRecord read : processedReads) {
+            final byte[] readGcpArray = new byte[read.getReadLength()];
+            Arrays.fill(readGcpArray,gcp);
+            result.put(read,readGcpArray);
+        }
+        return result;
+    }
+    
     @DataProvider(name = "HaplotypeIndexingProvider")
     public Object[][] makeHaplotypeIndexingProvider() {
         List<Object[]> tests = new ArrayList<>();

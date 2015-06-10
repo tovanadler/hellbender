@@ -11,6 +11,7 @@ import java.util.List;
  * @author Valentin Ruano-Rubio &lt;valentin@broadinstitute.org&gt;
  */
 public final class AlleleListUtils {
+    private AlleleListUtils(){}
 
     @SuppressWarnings("unchecked")
     private static final AlleleList EMPTY_LIST = new AlleleList() {
@@ -40,21 +41,26 @@ public final class AlleleListUtils {
      * @return {@code true} iff both list are equal.
      */
     public static <A extends Allele> boolean equals(final AlleleList<A> first, final AlleleList<A> second) {
-        if (first == null || second == null)
+        if (first == null || second == null) {
             throw new IllegalArgumentException("no null list allowed");
+        }
         final int alleleCount = first.alleleCount();
-        if (alleleCount != second.alleleCount())
+        if (alleleCount != second.alleleCount()) {
             return false;
+        }
 
         for (int i = 0; i < alleleCount; i++) {
             final A firstSample = first.alleleAt(i);
-            if (firstSample == null)
+            if (firstSample == null) {
                 throw new IllegalStateException("no null samples allowed in sample-lists: first list at " + i);
+            }
             final A secondSample = second.alleleAt(i);
-            if (secondSample == null)
+            if (secondSample == null) {
                 throw new IllegalArgumentException("no null samples allowed in sample-list: second list at " + i);
-            if (!firstSample.equals(secondSample))
+            }
+            if (!firstSample.equals(secondSample)) {
                 return false;
+            }
         }
 
         return true;
@@ -76,12 +82,15 @@ public final class AlleleListUtils {
      * @return -1 if there is no reference allele, or a values in [0,{@code list.alleleCount()}).
      */
     public static <A extends Allele> int indexOfReference(final AlleleList<A> list) {
-        if (list == null)
+        if (list == null) {
             throw new IllegalArgumentException("the input list cannot be null");
+        }
         final int alleleCount = list.alleleCount();
-        for (int i = 0; i < alleleCount; i++)
-            if (list.alleleAt(i).isReference())
+        for (int i = 0; i < alleleCount; i++) {
+            if (list.alleleAt(i).isReference()) {
                 return i;
+            }
+        }
         return -1;
     }
 
@@ -95,8 +104,9 @@ public final class AlleleListUtils {
      * @return never {@code null}.
      */
     public static <A extends Allele> List<A> asList(final AlleleList<A> list) {
-        if (list == null)
+        if (list == null) {
             throw new IllegalArgumentException("the list cannot be null");
+        }
         return new AsList(list);
     }
 
@@ -106,24 +116,23 @@ public final class AlleleListUtils {
      * @return never {@code null}.
      */
     @SuppressWarnings("unchecked")
-    public static final <A extends Allele> AlleleList<A> emptyList() {
+    public static <A extends Allele> AlleleList<A> emptyList() {
         return EMPTY_LIST;
     }
 
     /**
      * Simple list view of a sample-list.
      */
-    private static class AsList<A extends Allele> extends AbstractList<A> {
+    private static final class AsList<A extends Allele> extends AbstractList<A> {
 
         private final AlleleList<A> list;
 
         private AsList(final AlleleList<A> list) {
             this.list = list;
-
         }
 
         @Override
-        public A get(int index) {
+        public A get(final int index) {
             return list.alleleAt(index);
         }
 
@@ -146,13 +155,17 @@ public final class AlleleListUtils {
      * @return never {@code null}
      */
     public static <A extends Allele> AlleleListPermutation<A> permutation(final AlleleList<A> original, final AlleleList<A> target) {
-        if (equals(original,target))
+        if (equals(original,target)) {
             return new NonPermutation<>(original);
-        else
-            return new ActualPermutation<>(original,target);
+        } else {
+            return new ActualPermutation<>(original, target);
+        }
     }
 
-    private static class NonPermutation<A extends Allele> implements AlleleListPermutation<A> {
+    /**
+     * This is the identity permutation.
+     */
+    private static final class NonPermutation<A extends Allele> implements AlleleListPermutation<A> {
 
         private final AlleleList<A> list;
 
@@ -171,12 +184,12 @@ public final class AlleleListUtils {
         }
 
         @Override
-        public int toIndex(int fromIndex) {
+        public int toIndex(final int fromIndex) {
             return fromIndex;
         }
 
         @Override
-        public int fromIndex(int toIndex) {
+        public int fromIndex(final int toIndex) {
             return toIndex;
         }
 
@@ -200,7 +213,6 @@ public final class AlleleListUtils {
             return asList(list);
         }
 
-
         @Override
         public int alleleCount() {
             return list.alleleCount();
@@ -217,7 +229,7 @@ public final class AlleleListUtils {
         }
     }
 
-    private static class ActualPermutation<A extends Allele> implements AlleleListPermutation<A> {
+    private static final class ActualPermutation<A extends Allele> implements AlleleListPermutation<A> {
 
         private final AlleleList<A> from;
 
@@ -234,16 +246,18 @@ public final class AlleleListUtils {
             this.to = target;
             final int toSize = target.alleleCount();
             final int fromSize = original.alleleCount();
-            if (fromSize < toSize)
+            if (fromSize < toSize) {
                 throw new IllegalArgumentException("target allele list is not a permutation of the original allele list");
+            }
 
             fromIndex = new int[toSize];
             boolean nonPermuted = fromSize == toSize;
             this.isPartial = !nonPermuted;
             for (int i = 0; i < toSize; i++) {
                 final int originalIndex = original.alleleIndex(target.alleleAt(i));
-                if (originalIndex < 0)
+                if (originalIndex < 0) {
                     throw new IllegalArgumentException("target allele list is not a permutation of the original allele list");
+                }
                 fromIndex[i] = originalIndex;
                 nonPermuted &= originalIndex == i;
             }
@@ -262,12 +276,12 @@ public final class AlleleListUtils {
         }
 
         @Override
-        public int toIndex(int fromIndex) {
+        public int toIndex(final int fromIndex) {
             return to.alleleIndex(from.alleleAt(fromIndex));
         }
 
         @Override
-        public int fromIndex(int toIndex) {
+        public int fromIndex(final int toIndex) {
             return fromIndex[toIndex];
         }
 

@@ -17,6 +17,41 @@ import java.util.*;
  */
 public final class AlleleListUtilsUnitTest {
 
+    @Test
+    public void testEmptyList(){
+        final AlleleList<Allele> al = AlleleListUtils.emptyList();
+        Assert.assertEquals(al.alleleCount(), 0);
+        Assert.assertEquals(al.alleleIndex(null), -1);
+    }
+
+    @Test(expectedExceptions = IllegalArgumentException.class)
+    public void testIndexOfReferenceNull(){
+        AlleleListUtils.indexOfReference(null);
+    }
+
+    @Test(expectedExceptions = IllegalArgumentException.class)
+    public void testasListNull(){
+        AlleleListUtils.asList(null);
+    }
+
+    @Test(expectedExceptions = IllegalArgumentException.class)
+    public void testEmptyListAdd(){
+        final AlleleList<Allele> al = AlleleListUtils.emptyList();
+        al.alleleAt(0);
+    }
+
+    @Test(expectedExceptions = IllegalArgumentException.class, dataProvider = "singleAlleleListData")
+    public void testEqualToNull(final List<Allele> alleles1){
+        final AlleleList<Allele> alleleList = new IndexedAlleleList<>(alleles1);
+        AlleleListUtils.equals(alleleList, null);
+    }
+
+    @Test(expectedExceptions = IllegalArgumentException.class, dataProvider = "singleAlleleListData")
+    public void testEqualToNull1(final List<Allele> alleles1){
+        final AlleleList<Allele> alleleList = new IndexedAlleleList<>(alleles1);
+        AlleleListUtils.equals(null, alleleList);
+    }
+
     @Test(dataProvider = "singleAlleleListData")
     public void testAsList(final List<Allele> alleles1) {
          final Allele[] uniqueAlleles = new LinkedHashSet<>(alleles1).toArray(new Allele[0]);
@@ -62,6 +97,8 @@ public final class AlleleListUtilsUnitTest {
         Assert.assertTrue(selfPermutation.isNonPermuted());
         Assert.assertFalse(selfPermutation.isPartial());
         for (int i = 0; i < originalAlleleList.alleleCount(); i++) {
+            Assert.assertEquals(selfPermutation.alleleAt(i), originalAlleleList.alleleAt(i));
+
             Assert.assertEquals(selfPermutation.fromIndex(i), i);
             Assert.assertEquals(selfPermutation.toIndex(i), i);
             Assert.assertEquals(selfPermutation.fromList(), selfPermutation.toList());

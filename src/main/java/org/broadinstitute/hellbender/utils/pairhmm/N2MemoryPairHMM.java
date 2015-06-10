@@ -10,9 +10,6 @@ abstract class N2MemoryPairHMM extends PairHMM {
     protected double[][] insertionMatrix = null;
     protected double[][] deletionMatrix = null;
 
-    // only used for debugging purposes
-    protected boolean doNotUseTristateCorrection = false;
-
     @Override
     public void doNotUseTristateCorrection() {
         doNotUseTristateCorrection = true;

@@ -52,20 +52,22 @@ public final class IndexedSet<E> extends AbstractSet<E> implements Set<E> {
      * @throws IllegalArgumentException
      * if {@code values} array is {@code null} itself, or it contains {@code null}.
      */
-    @SuppressWarnings("unchecked")
     public IndexedSet(final Collection<E> values) {
-        if (values == null)
+        if (values == null) {
             throw new IllegalArgumentException("input values cannot be null");
+        }
 
         final int initialCapacity = values.size();
         elements = new ArrayList<>(initialCapacity);
         indexByElement = new HashMap<>(initialCapacity);
         int nextIndex = 0;
         for (final E value : values) {
-            if (value == null)
+            if (value == null) {
                 throw new IllegalArgumentException("null element not allowed: index == " + nextIndex);
-            if (indexByElement.containsKey(value))
+            }
+            if (indexByElement.containsKey(value)) {
                 continue;
+            }
             indexByElement.put(value, nextIndex++);
             elements.add(value);
         }
@@ -83,20 +85,22 @@ public final class IndexedSet<E> extends AbstractSet<E> implements Set<E> {
      * @throws IllegalArgumentException
      * if {@code values} collection is {@code null} itself, or it contains {@code null}.
      */
-    @SuppressWarnings("unchecked")
     public IndexedSet(final E... values) {
-        if (values == null)
+        if (values == null) {
             throw new IllegalArgumentException("input values cannot be null");
+        }
 
         final int initialCapacity = values.length;
         elements = new ArrayList<>(initialCapacity);
         indexByElement = new HashMap<>(initialCapacity);
         int nextIndex = 0;
         for (final E value : values) {
-            if (value == null)
+            if (value == null) {
                 throw new IllegalArgumentException("null element not allowed: index == " + nextIndex);
-            if (indexByElement.containsKey(value))
+            }
+            if (indexByElement.containsKey(value)) {
                 continue;
+            }
             indexByElement.put(value, nextIndex++);
             elements.add(value);
         }
@@ -118,8 +122,9 @@ public final class IndexedSet<E> extends AbstractSet<E> implements Set<E> {
      * @return never {@code null}.
      */
     public List<E> asList() {
-        if (unmodifiableElementsListView == null)
+        if (unmodifiableElementsListView == null) {
             unmodifiableElementsListView = Collections.unmodifiableList(elements);
+        }
         return unmodifiableElementsListView;
     }
 
@@ -135,10 +140,12 @@ public final class IndexedSet<E> extends AbstractSet<E> implements Set<E> {
      * @throws IllegalArgumentException {@code index} is out of bounds.
      */
     protected void checkIndex(final int index) {
-        if (index < 0)
+        if (index < 0) {
             throw new IllegalArgumentException("the index cannot be negative: " + index);
-        if (index >= size())
+        }
+        if (index >= size()) {
             throw new IllegalArgumentException("the index is equal or larger than the list length: " + index + " >= " + size());
+        }
     }
 
     @Override
@@ -183,10 +190,12 @@ public final class IndexedSet<E> extends AbstractSet<E> implements Set<E> {
      */
     @Override
     public boolean add(final E o) {
-        if (o == null)
+        if (o == null) {
             throw new IllegalArgumentException("the input argument cannot be null");
-        if (contains(o))
+        }
+        if (contains(o)) {
             return false;
+        }
         final int nextIndex = size();
         elements.add(o);
         indexByElement.put(o, nextIndex);
@@ -203,22 +212,25 @@ public final class IndexedSet<E> extends AbstractSet<E> implements Set<E> {
      *     The method will return {@code true} in this case.
      * </p>
      *
-     * @param o the object to add.
+     * @param o the object to remove.
      *
      * @throw IllegalArgumentException if {@code o} is {@code null}.
      *
      * @return {@code true} iff the set was modified by this operation.
-     */   @Override
+     */
+    @Override
     public boolean remove(final Object o) {
-        final int index = indexByElement.remove(o);
-        if (index == -1)
+        final int index = indexOf(o);
+        if (index == -1) {
             return false;
+        }
         elements.remove(index);
         indexByElement.remove(o);
         final ListIterator<E> it = elements.listIterator(index);
         int nextIndex = index;
-        while (it.hasNext())
-            indexByElement.put(it.next(),nextIndex++);
+        while (it.hasNext()) {
+            indexByElement.put(it.next(), nextIndex++);
+        }
         return true;
     }
 
@@ -238,12 +250,15 @@ public final class IndexedSet<E> extends AbstractSet<E> implements Set<E> {
      */
     @Override
     public boolean equals(final Object o) {
-        if (o == this)
+        if (o == this) {
             return true;
-        if (o == null)
+        }
+        if (o == null) {
             return false;
-        if (!(o instanceof IndexedSet<?>))
+        }
+        if (!(o instanceof IndexedSet<?>)) {
             return false;
+        }
 
         final IndexedSet<?> other = (IndexedSet<?>)o;
 
@@ -261,16 +276,20 @@ public final class IndexedSet<E> extends AbstractSet<E> implements Set<E> {
      * (as compared using {@link Object#equals} a this set with matching indices.
      */
     public boolean equals(final IndexedSet<?> other) {
-        if (other == null)
+        if (other == null) {
             throw new IllegalArgumentException("other cannot be null");
+        }
         final ArrayList<?> otherElements = other.elements;
 
         final int elementCount = elements.size();
-        if (otherElements.size() != elementCount)
+        if (otherElements.size() != elementCount) {
             return false;
-        for (int i = 0; i < elementCount; i++)
-            if (!elements.get(i).equals(otherElements.get(i)))
+        }
+        for (int i = 0; i < elementCount; i++) {
+            if (!elements.get(i).equals(otherElements.get(i))) {
                 return false;
+            }
+        }
         return true;
     }
 
@@ -278,8 +297,9 @@ public final class IndexedSet<E> extends AbstractSet<E> implements Set<E> {
     public int hashCode() {
         int result = 1;
 
-        for (final E element : elements)
+        for (final E element : elements) {
             result = 31 * result + (element == null ? 0 : element.hashCode());
+        }
         return result;
     }
 
@@ -305,9 +325,10 @@ public final class IndexedSet<E> extends AbstractSet<E> implements Set<E> {
      * @return {@code -1} if such an object is not an element of this set, otherwise is index in the set thus a
      * values within [0,{@link #size()}).
      */
-    public int indexOf(final E o) {
-        if (o == null)
+    public int indexOf(final Object o) {
+        if (o == null) {
             throw new IllegalArgumentException("the query object cannot be null");
+        }
         return indexByElement.containsKey(o) ? indexByElement.get(o) : -1;
     }
 

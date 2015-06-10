@@ -127,7 +127,6 @@ public final class PairHMMModel {
      *
      * @return never {@code null}. An array of length {@link #TRANS_PROB_ARRAY_LENGTH}.
      */
-    @SuppressWarnings("unused")
     public static double[] qualToTransProbs(final byte insQual, final byte delQual, final byte gcp) {
         final double[] dest = new double[TRANS_PROB_ARRAY_LENGTH];
         qualToTransProbs(dest,insQual,delQual,gcp);
@@ -154,7 +153,6 @@ public final class PairHMMModel {
      * @throws ArrayIndexOutOfBoundsException if {@code dest} or any of its elements is not large enough to contain the
      *  transition  matrix.
      */
-    @SuppressWarnings("unused")
     public static void qualToTransProbs(final double[][] dest, final byte[] insQuals, final byte[] delQuals, final byte[] gcps) {
         final int readLength = insQuals.length;
         if (delQuals.length != readLength) throw new IllegalArgumentException("deletion quality array length does not match insert quality array length: " + readLength + " != " + delQuals.length);
@@ -185,7 +183,6 @@ public final class PairHMMModel {
      *
      * @return never {@code null}, an matrix of the dimensions explained above.
      */
-    @SuppressWarnings("unused")
     public static double[][] qualToTransProbs(final byte[] insQuals, final byte[] delQuals, final byte[] gcps) {
         final double[][] dest = createTransitionMatrix(insQuals.length);
         qualToTransProbs(dest,insQuals,delQuals,gcps);
@@ -211,7 +208,8 @@ public final class PairHMMModel {
         dest[matchToInsertion] = QualityUtils.qualToErrorProbLog10(insQual);
         dest[matchToDeletion] = QualityUtils.qualToErrorProbLog10(delQual);
         dest[indelToMatch] = QualityUtils.qualToProbLog10(gcp);
-        dest[insertionToInsertion] = dest[deletionToDeletion] = QualityUtils.qualToErrorProbLog10(gcp);
+        dest[insertionToInsertion] = QualityUtils.qualToErrorProbLog10(gcp);
+        dest[deletionToDeletion] = QualityUtils.qualToErrorProbLog10(gcp);
     }
 
     /**
@@ -227,7 +225,6 @@ public final class PairHMMModel {
      *
      * @return never {@code null}. An array of length {@link #TRANS_PROB_ARRAY_LENGTH}.
      */
-    @SuppressWarnings("unused")
     public static double[] qualToTransProbsLog10(final byte insQual, final byte delQual, final byte gcp) {
         final double[] dest = new double[TRANS_PROB_ARRAY_LENGTH];
         qualToTransProbsLog10(dest,insQual,delQual,gcp);
@@ -253,7 +250,6 @@ public final class PairHMMModel {
      * @throws ArrayIndexOutOfBoundsException if {@code dest} or any of its elements is not large enough to contain the
      *  transition  matrix.
      */
-    @SuppressWarnings("unused")
     public static void qualToTransProbsLog10(final double[][] dest, final byte[] insQuals, final byte[] delQuals, final byte[] gcps) {
         final int readLength = insQuals.length;
         if (delQuals.length != readLength) throw new IllegalArgumentException("deletion quality array length does not match insert quality array length: " + readLength + " != " + delQuals.length);
@@ -284,7 +280,6 @@ public final class PairHMMModel {
      *
      * @return never {@code null}, an matrix of the dimensions explained above.
      */
-    @SuppressWarnings("unused")
     public static double[][] qualToTransProbsLog10(final byte[] insQuals, final byte[] delQuals, final byte[] gcps) {
         final double[][] dest = createTransitionMatrix(insQuals.length);
         qualToTransProbsLog10(dest,insQuals,delQuals,gcps);

@@ -14,6 +14,99 @@ import java.util.*;
  */
 public final class IndexedSetUnitTest {
 
+    @Test(expectedExceptions = IllegalArgumentException.class)
+    public void testInitError(){
+        final Collection<String> c = null;
+        final IndexedSet<String> is = new IndexedSet<>(c);
+    }
+
+    @Test(expectedExceptions = IllegalArgumentException.class)
+    public void testEqualsError(){
+        final String[] c = {"a", "b"};
+        final IndexedSet<String> is = new IndexedSet<>(c);
+        is.equals(null);
+    }
+
+    @Test(expectedExceptions = IllegalArgumentException.class)
+    public void testInitError_nullColl(){
+        final Collection<String> c = Arrays.asList("a", null);
+        final IndexedSet<String> is = new IndexedSet<>(c);
+    }
+
+    @Test(expectedExceptions = IllegalArgumentException.class)
+    public void testInitError2(){
+        final String[] c = null;
+        final IndexedSet<String> is = new IndexedSet<>(c);
+    }
+
+    @Test(expectedExceptions = IllegalArgumentException.class)
+    public void testInitError3(){
+        final String[] c = {"a", null};
+        final IndexedSet<String> is = new IndexedSet<>(c);
+    }
+
+    @Test(expectedExceptions = IllegalArgumentException.class)
+    public void testInitError4(){
+        final String[] c = {"a", "b"};
+        final IndexedSet<String> is = new IndexedSet<>(c);
+        is.add(null);
+    }
+
+    @Test(expectedExceptions = IllegalArgumentException.class)
+    public void testInitError5(){
+        final String[] c = {"a", "b"};
+        final IndexedSet<String> is = new IndexedSet<>(c);
+        is.indexOf(null);
+    }
+
+    @Test(expectedExceptions = IllegalArgumentException.class)
+    public void testInitError6(){
+        final String[] c = {"a", "b"};
+        final IndexedSet<String> is = new IndexedSet<>(c);
+        is.remove(null);
+    }
+
+    @Test
+    public void testRemove(){
+        final String[] c = {"a", "b"};
+        final IndexedSet<String> is = new IndexedSet<>(c);
+        final boolean cC = is.remove("c");
+        Assert.assertEquals(cC, false);
+
+        final boolean cb = is.remove("b");
+        Assert.assertEquals(cb, true);
+    }
+
+    @Test
+    public void testEquals(){
+        final String[] c = {"a", "b"};
+        final String[] c1 = {"a", "B"};
+        final String[] c3 = {"a", "b", "c"};
+        final IndexedSet<String> is1 = new IndexedSet<>(c);
+        final IndexedSet<String> is2 = new IndexedSet<>(c);
+        final IndexedSet<String> is3 = new IndexedSet<>(c1);
+        final IndexedSet<String> is4 = new IndexedSet<>(c3);
+        Assert.assertEquals(is1, is2);
+        Assert.assertEquals(is1, is1);
+
+        Assert.assertTrue(is1.equals(is1));
+        Assert.assertTrue(is1.equals((Object)is1));
+
+        final String nullString = null;
+        Assert.assertFalse(is1.equals(nullString));
+        Assert.assertFalse(is1.equals("a,b"));
+
+        Assert.assertNotEquals(is1, is3);
+        Assert.assertNotEquals(is2, is3);
+        Assert.assertNotEquals(is1, is4);
+        Assert.assertNotEquals(is2, is4);
+        Assert.assertNotEquals(is3, is4);
+
+        Assert.assertEquals(is1.hashCode(), is2.hashCode());
+        Assert.assertNotEquals(is1.hashCode(), is3.hashCode());
+        Assert.assertNotEquals(is2.hashCode(), is3.hashCode());
+    }
+
     @Test(dataProvider = "initialCapacityElementCountMaxElementData")
     public void testCompositionBySingleElementAddition(final int initialCapacity,
                                                        final int elementCount, final int maxElement) {

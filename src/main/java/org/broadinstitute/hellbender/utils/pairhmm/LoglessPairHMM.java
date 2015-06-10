@@ -4,12 +4,12 @@ import org.broadinstitute.hellbender.utils.QualityUtils;
 
 import static org.broadinstitute.hellbender.utils.pairhmm.PairHMMModel.*;
 
-public class LoglessPairHMM extends N2MemoryPairHMM {
-    protected static final double INITIAL_CONDITION = Math.pow(2, 1020);
-    protected static final double INITIAL_CONDITION_LOG10 = Math.log10(INITIAL_CONDITION);
+public final class LoglessPairHMM extends N2MemoryPairHMM {
+    static final double INITIAL_CONDITION = Math.pow(2, 1020);
+    static final double INITIAL_CONDITION_LOG10 = Math.log10(INITIAL_CONDITION);
 
     // we divide e by 3 because the observed base could have come from any of the non-observed alleles
-    protected static final double TRISTATE_CORRECTION = 3.0;
+    static final double TRISTATE_CORRECTION = 3.0;
 
 
     
@@ -76,7 +76,7 @@ public class LoglessPairHMM extends N2MemoryPairHMM {
      * @param readQuals      the base quality scores of the read
      * @param startIndex     where to start updating the distanceMatrix (in case this read is similar to the previous read)
      */
-    protected void initializePriors(final byte[] haplotypeBases, final byte[] readBases, final byte[] readQuals, final int startIndex) {
+    void initializePriors(final byte[] haplotypeBases, final byte[] readBases, final byte[] readQuals, final int startIndex) {
 
         // initialize the pBaseReadLog10 matrix for all combinations of read x haplotype bases
         // Abusing the fact that java initializes arrays with 0.0, so no need to fill in rows and columns below 2.
@@ -99,27 +99,7 @@ public class LoglessPairHMM extends N2MemoryPairHMM {
      * @param deletionGOP    deletion quality scores of the read
      * @param overallGCP     overall gap continuation penalty
      */
-    protected static void initializeProbabilities(final double[][] transition, final byte[] insertionGOP, final byte[] deletionGOP, final byte[] overallGCP) {
+    static void initializeProbabilities(final double[][] transition, final byte[] insertionGOP, final byte[] deletionGOP, final byte[] overallGCP) {
         PairHMMModel.qualToTransProbs(transition,insertionGOP,deletionGOP,overallGCP);
-    }
-
-    /**
-     * Updates a cell in the HMM matrix
-     *
-     * The read and haplotype indices are offset by one because the state arrays have an extra column to hold the
-     * initial conditions
-
-     * @param indI             row index in the matrices to update
-     * @param indJ             column index in the matrices to update
-     * @param prior            the likelihood editing distance matrix for the read x haplotype
-     * @param transition        an array with the six transition relevant to this location
-     */
-    protected void updateCell( final int indI, final int indJ, final double prior, final double[] transition) {
-
-        matchMatrix[indI][indJ] = prior * ( matchMatrix[indI - 1][indJ - 1] * transition[matchToMatch] +
-                                                 insertionMatrix[indI - 1][indJ - 1] * transition[indelToMatch] +
-                                                 deletionMatrix[indI - 1][indJ - 1] * transition[indelToMatch] );
-        insertionMatrix[indI][indJ] = matchMatrix[indI - 1][indJ] * transition[matchToInsertion] + insertionMatrix[indI - 1][indJ] * transition[insertionToInsertion];
-        deletionMatrix[indI][indJ] = matchMatrix[indI][indJ - 1] * transition[matchToDeletion] + deletionMatrix[indI][indJ - 1] * transition[deletionToDeletion];
     }
 }

@@ -80,18 +80,20 @@ public final class MathUtils {
         public static final double MAX_TOLERANCE = 8.0;
 
         public static double get(final double difference) {
-            if (cache == null)
+            if (cache == null) {
                 initialize();
+            }
             final int index = fastRound(difference * INV_STEP);
             return cache[index];
         }
 
-        private static synchronized void initialize() {
+        private static void initialize() {
             if (cache == null) {
                 final int tableSize = (int) (MAX_TOLERANCE / TABLE_STEP) + 1;
                 cache = new double[tableSize];
-                for (int k = 0; k < cache.length; k++)
+                for (int k = 0; k < cache.length; k++) {
                     cache[k] = Math.log10(1.0 + Math.pow(10.0, -((double) k) * TABLE_STEP));
+                }
             }
         }
 
@@ -117,8 +119,9 @@ public final class MathUtils {
         double approxSum = vals[maxElementIndex];
 
         for (int i = 0; i < endIndex; i++) {
-            if (i == maxElementIndex || vals[i] == Double.NEGATIVE_INFINITY)
+            if (i == maxElementIndex || vals[i] == Double.NEGATIVE_INFINITY) {
                 continue;
+            }
 
             final double diff = approxSum - vals[i];
             if (diff < JacobianLogTable.MAX_TOLERANCE) {
@@ -134,20 +137,20 @@ public final class MathUtils {
         return approximateLog10SumLog10(a, approximateLog10SumLog10(b, c));
     }
 
-    public static double approximateLog10SumLog10(double small, double big) {
+    public static double approximateLog10SumLog10(final double small, final double big) {
         // make sure small is really the smaller value
         if (small > big) {
-            final double t = big;
-            big = small;
-            small = t;
+            return approximateLog10SumLog10(big, small);
         }
 
-        if (small == Double.NEGATIVE_INFINITY || big == Double.NEGATIVE_INFINITY)
+        if (small == Double.NEGATIVE_INFINITY || big == Double.NEGATIVE_INFINITY) {
             return big;
+        }
 
         final double diff = big - small;
-        if (diff >= JacobianLogTable.MAX_TOLERANCE)
+        if (diff >= JacobianLogTable.MAX_TOLERANCE) {
             return big;
+        }
 
         // OK, so |y-x| < tol: we use the following identity then:
         // we need to compute log10(10^x + 10^y)
@@ -234,6 +237,22 @@ public final class MathUtils {
     }
 
     /**
+     * Computes a binomial probability.  This is computed using the formula
+     * <p/>
+     * B(k; n; p) = [ n! / ( k! (n - k)! ) ] (p^k)( (1-p)^k )
+     * <p/>
+     * where n is the number of trials, k is the number of successes, and p is the probability of success
+     *
+     * @param n number of Bernoulli trials
+     * @param k number of successes
+     * @param p probability of success
+     * @return the binomial probability of the specified configuration.  Computes values down to about 1e-237.
+     */
+    public static double binomialProbability(final int n, final int k, final double p) {
+        return Math.pow(10, log10BinomialProbability(n, k, Math.log10(p)));
+    }
+
+    /**
      * binomial Probability(int, int, double) with log10 applied to result
      */
     public static double log10BinomialProbability(final int n, final int k, final double log10p) {
@@ -253,21 +272,21 @@ public final class MathUtils {
 
 
     public static double log10sumLog10(final double[] log10p, final int start, final int finish) {
-
-        if (start >= finish)
+        if (start >= finish) {
             return Double.NEGATIVE_INFINITY;
-        final int maxElementIndex = MathUtils.maxElementIndex(log10p, start, finish);
+        }
+        final int maxElementIndex = maxElementIndex(log10p, start, finish);
         final double maxValue = log10p[maxElementIndex];
-        if(maxValue == Double.NEGATIVE_INFINITY)
+        if(maxValue == Double.NEGATIVE_INFINITY) {
             return maxValue;
+        }
         double sum = 1.0;
         for (int i = start; i < finish; i++) {
             double curVal = log10p[i];
             double scaled_val = curVal - maxValue;
             if (i == maxElementIndex || curVal == Double.NEGATIVE_INFINITY) {
                 continue;
-            }
-            else {
+            } else {
                 sum += Math.pow(10.0, scaled_val);
             }
         }
@@ -275,6 +294,16 @@ public final class MathUtils {
             throw new IllegalArgumentException("log10p: Values must be non-infinite and non-NAN");
         }
         return maxValue + (sum != 1.0 ? Math.log10(sum) : 0.0);
+    }
+
+    /**
+     * normalizes the log10-based array.  ASSUMES THAT ALL ARRAY ENTRIES ARE <= 0 (<= 1 IN REAL-SPACE).
+     *
+     * @param array the array to be normalized
+     * @return a newly allocated array corresponding the normalized values in array
+     */
+    public static double[] normalizeFromLog10(final double[] array) {
+        return normalizeFromLog10(array, false);
     }
 
     /**
@@ -332,16 +361,6 @@ public final class MathUtils {
         }
 
         return normalized;
-    }
-
-    /**
-     * normalizes the log10-based array.  ASSUMES THAT ALL ARRAY ENTRIES ARE <= 0 (<= 1 IN REAL-SPACE).
-     *
-     * @param array the array to be normalized
-     * @return a newly allocated array corresponding the normalized values in array
-     */
-    public static double[] normalizeFromLog10(final double[] array) {
-        return normalizeFromLog10(array, false);
     }
 
     /**

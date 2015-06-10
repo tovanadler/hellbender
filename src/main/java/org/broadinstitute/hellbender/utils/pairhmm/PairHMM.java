@@ -10,6 +10,7 @@ import org.broadinstitute.hellbender.utils.genotyper.LikelihoodMatrix;
 import org.broadinstitute.hellbender.utils.haplotype.Haplotype;
 import org.broadinstitute.hellbender.utils.read.ReadUtils;
 
+import java.io.Closeable;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
@@ -18,15 +19,13 @@ import java.util.Map;
 /**
  * Class for performing the pair HMM for local alignment. Figure 4.3 in Durbin 1998 book.
  */
-public abstract class PairHMM {
+public abstract class PairHMM implements Closeable{
     protected final static Logger logger = LogManager.getLogger(PairHMM.class);
 
     protected boolean constantsAreInitialized = false;
 
     protected byte[] previousHaplotypeBases;
     protected int hapStartIndex;
-
-    public static final byte BASE_QUALITY_SCORE_THRESHOLD = (byte) 18; // Base quals less than this value are squashed down to min possible qual
 
     public enum HMM_IMPLEMENTATION {
         /* Very slow implementation which uses very accurate log10 sum functions. Only meant to be used as a reference test implementation */
@@ -113,17 +112,6 @@ public abstract class PairHMM {
             }
         }
         return listMaxReadLength;
-    }
-
-    static int findMaxHaplotypeLength(final Collection<Haplotype> haplotypes) {
-        int listMaxHaplotypeLength = 0;
-        for(final Haplotype h : haplotypes) {
-            final int haplotypeLength = h.getBases().length;
-            if( haplotypeLength > listMaxHaplotypeLength ) {
-                listMaxHaplotypeLength = haplotypeLength;
-            }
-        }
-        return listMaxHaplotypeLength;
     }
 
     /**
@@ -240,7 +228,7 @@ public abstract class PairHMM {
         // Looking ahead is necessary for the ArrayLoglessPairHMM implementation
         final int nextHapStartIndex =  (nextHaploytpeBases == null || haplotypeBases.length != nextHaploytpeBases.length) ? 0 : findFirstPositionWhereHaplotypesDiffer(haplotypeBases, nextHaploytpeBases);
 
-        double result = subComputeReadLikelihoodGivenHaplotypeLog10(haplotypeBases, readBases, readQuals, insertionGOP, deletionGOP, overallGCP, hapStartIndex, recacheReadValues, nextHapStartIndex);
+        final double result = subComputeReadLikelihoodGivenHaplotypeLog10(haplotypeBases, readBases, readQuals, insertionGOP, deletionGOP, overallGCP, hapStartIndex, recacheReadValues, nextHapStartIndex);
 
         if ( result > 0.0) {
             throw new IllegalStateException("PairHMM Log Probability cannot be greater than 0: " + String.format("haplotype: %s, read: %s, result: %f, PairHMM: %s", new String(haplotypeBases), new String(readBases), result, this.getClass().getSimpleName()));
@@ -297,11 +285,14 @@ public abstract class PairHMM {
     /**
      * Return the results of the computeLikelihoods function
      */
-    public double[] getLikelihoodArray() { return mLikelihoodArray; }
+    public double[] getLikelihoodArray() {
+        return mLikelihoodArray;
+    }
 
     /**
      * Called at the end of the program to close files, print profiling information etc 
      */
+    @Override
     public void close() {
         if(doProfiling)
             logger.info("Total compute time in PairHMM computeLikelihoods() : "+(pairHMMComputeTime*1e-9));

@@ -237,7 +237,9 @@ public final class PairHMMModelUnitTest extends BaseTest {
     @Test(dataProvider = "dualTestDataProvider")
     public void testDoubleQualToProb(final int insQual, final int delQual, final double log10Expected, final double expected) {
         Assert.assertEquals(PairHMMModel.matchToMatchProb(insQual, delQual), expected, TOLERANCE);
+        Assert.assertEquals(PairHMMModel.matchToMatchProb(delQual, insQual), expected, TOLERANCE);
         Assert.assertEquals(PairHMMModel.matchToMatchProbLog10(insQual, delQual), log10Expected, TOLERANCE);
+        Assert.assertEquals(PairHMMModel.matchToMatchProbLog10(delQual, insQual), log10Expected, TOLERANCE);
         Assert.assertEquals(PairHMMModel.matchToMatchProb((byte) insQual, (byte) delQual), expected, TOLERANCE);
         Assert.assertEquals(PairHMMModel.matchToMatchProbLog10((byte) insQual, (byte) delQual), log10Expected, TOLERANCE);
     }

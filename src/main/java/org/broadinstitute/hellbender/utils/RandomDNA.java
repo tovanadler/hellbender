@@ -13,7 +13,7 @@ import java.util.Random;
  */
 public final class RandomDNA {
 
-    private Random random;
+    private final Random random;
 
     /**
      * Constructs a new random DNA generator.
@@ -23,7 +23,6 @@ public final class RandomDNA {
      *     described in {@link Random} documentation.
      * </p>
      */
-    @SuppressWarnings("unused")
     public RandomDNA() {
         random = new Random();
     }
@@ -36,8 +35,9 @@ public final class RandomDNA {
      * @throws IllegalArgumentException if {@code rnd} is {@code null}.
      */
     public RandomDNA(final Random rnd) {
-        if (rnd == null)
+        if (rnd == null) {
             throw new IllegalArgumentException("the random number generator cannot be null");
+        }
         random = rnd;
     }
 
