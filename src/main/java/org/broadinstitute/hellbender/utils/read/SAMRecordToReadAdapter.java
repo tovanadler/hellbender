@@ -1,14 +1,25 @@
 package org.broadinstitute.hellbender.utils.read;
 
 
+import com.google.cloud.dataflow.sdk.coders.DelegateCoder;
+import com.google.cloud.dataflow.sdk.coders.KvCoder;
+import com.google.cloud.dataflow.sdk.coders.SerializableCoder;
 import com.google.cloud.dataflow.sdk.coders.StandardCoder;
+import com.google.cloud.dataflow.sdk.values.KV;
+import com.google.cloud.genomics.dataflow.coders.GenericJsonCoder;
 import htsjdk.samtools.*;
 import htsjdk.samtools.util.Locatable;
+import org.broadinstitute.hellbender.engine.dataflow.transforms.UuidCoder;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 
+import java.io.Serializable;
 import java.util.UUID;
 
-public final class SAMRecordToReadAdapter implements MutableRead {
+public final class SAMRecordToReadAdapter implements MutableRead, Serializable {
+
+    public SAMRecord getSamRecord() {
+        return samRecord;
+    }
 
     private final SAMRecord samRecord;
 
