@@ -117,15 +117,12 @@ public final class InsertSizeMetricsTransformUnitTest{
         SAMRecord read1 = ArtificialSAMUtils.createPair(ArtificialSAMUtils.createArtificialSamHeader(), "Read1", 100, 4, 200, true, false).get(0);
 
         List<DataflowHistogram<Integer>> histograms = Collections.nCopies(10, createDummyHistogram()); //create 10 histograms
-        List<InsertSizeAggregationLevel> keys = IntStream.range(0,10) //create 10 keys, half of which are aggregated by library and half of which aren't
-                .boxed()
-                .map( i -> 1 % 2 == 0)
-                .map(b -> new InsertSizeAggregationLevel(read1, b, false, false))
-                .collect(Collectors.toList());
+        List<InsertSizeAggregationLevel> keys =Collections.nCopies(10, new InsertSizeAggregationLevel(read1, false, false, false));
 
         List<KV<InsertSizeAggregationLevel,DataflowHistogram<Integer>>> keyedHistograms = kvZip(keys,histograms);
         InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics, Integer> result = combiner.apply(keyedHistograms);
-        Assert.assertEquals(result.getAllHistograms().size(), 10);
+        Assert.assertEquals(result.getAllHistograms().size(), 1);
+        Assert.assertEquals(result.getAllHistograms().get(0).getCount(), 30);
     }
 
     private DataflowHistogram<Integer> createDummyHistogram() {
@@ -162,7 +159,7 @@ public final class InsertSizeMetricsTransformUnitTest{
         DirectPipelineRunner.EvaluationResults results =  (DirectPipelineRunner.EvaluationResults)p.run();
         InsertSizeMetricsDataflowTransform.MetricsFileDataflow<InsertSizeMetrics, Integer> metricsFile = results.getPCollection(combined).get(0);
 
-        Assert.assertEquals(Sets.newHashSet(metricsFile.getHeaders()), Sets.newHashSet(new StringHeader("header1"), new StringHeader("header2"),new StringHeader("header3")));
+        Assert.assertEquals(Sets.newHashSet(metricsFile.getHeaders()), Sets.newHashSet(new StringHeader("header1"), new StringHeader("header2"), new StringHeader("header3")));
         Assert.assertEquals(metricsFile.getAllHistograms().size(), 2);
     }
 
