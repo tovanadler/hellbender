@@ -2,7 +2,6 @@ package org.broadinstitute.hellbender.utils.read.markduplicates;
 
 import htsjdk.samtools.util.Log;
 
-import java.io.Serializable;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -15,9 +14,7 @@ import java.util.regex.Pattern;
  * @author Tim Fennell
  * @author Nils Homer
  */
-public final class OpticalDuplicateFinder implements Serializable {
-
-    private static final long serialVersionUID = 1l;
+public final class OpticalDuplicateFinder {
 
     public static final String DEFAULT_READ_NAME_REGEX = "[a-zA-Z0-9]+:[0-9]:([0-9]+):([0-9]+):([0-9]+).*".intern();
 
@@ -188,14 +185,6 @@ public final class OpticalDuplicateFinder implements Serializable {
         return val;
     }
 
-    public boolean isOpticalDuplicate(PhysicalLocation a, PhysicalLocation b) {
-      return a.getReadGroup() == b.getReadGroup() &&
-          a.getTile() == b.getTile() &&
-          // There used to not be an abs here, not sure why.
-          Math.abs(a.getX() - b.getX()) <= this.opticalDuplicatePixelDistance &&
-          Math.abs(a.getY() - b.getY()) <= this.opticalDuplicatePixelDistance;
-    }
-
     /**
      * Finds which reads within the list of duplicates are likely to be optical duplicates of
      * one another.
@@ -229,14 +218,15 @@ public final class OpticalDuplicateFinder implements Serializable {
                 final PhysicalLocation rhs = list.get(j);
 
                 if (opticalDuplicateFlags[j]) continue;
-                if (isOpticalDuplicate(lhs, rhs)) {
-                  opticalDuplicateFlags[j] = true;
-                } else {
-                  continue outer;
+                if (lhs.getReadGroup() != rhs.getReadGroup()) continue outer;
+                if (lhs.getTile() != rhs.getTile()) continue outer;
+                if (rhs.getX() > lhs.getX() + this.opticalDuplicatePixelDistance) continue outer;
+
+                if (Math.abs(lhs.getY() - rhs.getY()) <= this.opticalDuplicatePixelDistance) {
+                    opticalDuplicateFlags[j] = true;
                 }
             }
         }
         return opticalDuplicateFlags;
     }
-
 }
